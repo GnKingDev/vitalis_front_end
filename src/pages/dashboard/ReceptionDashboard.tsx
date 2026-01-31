@@ -31,7 +31,7 @@ const ReceptionDashboard: React.FC = () => {
   const today = new Date().toISOString().split('T')[0];
   const patientsToday = mockPatients.filter(p => p.createdAt.startsWith('2026-01-31'));
   const paymentsToday = mockPayments.filter(p => p.createdAt.startsWith('2026-01-31'));
-  const pendingPayments = mockPayments.filter(p => p.status === 'pending');
+  
   const pendingAssignments = mockDoctorAssignments.filter(d => d.status === 'assigned');
 
   const totalRevenue = paymentsToday
@@ -65,10 +65,10 @@ const ReceptionDashboard: React.FC = () => {
           variant="primary"
         />
         <StatsCard
-          title="Paiements en attente"
-          value={pendingPayments.length}
-          icon={Clock}
-          variant="warning"
+          title="Paiements reçus"
+          value={paymentsToday.filter(p => p.status === 'paid').length}
+          icon={CreditCard}
+          variant="success"
         />
         <StatsCard
           title="En attente d'assignation"
@@ -184,24 +184,19 @@ const ReceptionDashboard: React.FC = () => {
           </CardContent>
         </Card>
 
-        {/* Pending payments */}
+        {/* Today's paid consultations */}
         <Card className="lg:col-span-2">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-lg font-semibold flex items-center gap-2">
-              <CreditCard className="h-5 w-5 text-warning" />
-              Paiements en attente
+              <CreditCard className="h-5 w-5 text-success" />
+              Paiements du jour
             </CardTitle>
-            <Button variant="ghost" size="sm" asChild>
-              <Link to="/reception/payments" className="flex items-center gap-1">
-                Gérer <ArrowRight className="h-4 w-4" />
-              </Link>
-            </Button>
           </CardHeader>
           <CardContent>
-            {pendingPayments.length === 0 ? (
+            {paymentsToday.filter(p => p.status === 'paid').length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 <CreditCard className="h-12 w-12 mx-auto mb-3 opacity-30" />
-                <p>Aucun paiement en attente</p>
+                <p>Aucun paiement aujourd'hui</p>
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -209,14 +204,14 @@ const ReceptionDashboard: React.FC = () => {
                   <thead>
                     <tr className="border-b">
                       <th className="text-left py-3 px-4 font-medium text-muted-foreground">Patient</th>
+                      <th className="text-left py-3 px-4 font-medium text-muted-foreground">ID Vitalis</th>
                       <th className="text-left py-3 px-4 font-medium text-muted-foreground">Type</th>
                       <th className="text-left py-3 px-4 font-medium text-muted-foreground">Montant</th>
                       <th className="text-left py-3 px-4 font-medium text-muted-foreground">Statut</th>
-                      <th className="text-right py-3 px-4 font-medium text-muted-foreground">Action</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {pendingPayments.map((payment) => {
+                    {paymentsToday.filter(p => p.status === 'paid').map((payment) => {
                       const patient = getPatient(payment.patientId);
                       return (
                         <tr key={payment.id} className="border-b hover:bg-secondary/30">
@@ -224,9 +219,11 @@ const ReceptionDashboard: React.FC = () => {
                             <p className="font-medium">
                               {patient?.firstName} {patient?.lastName}
                             </p>
-                            <p className="text-sm text-muted-foreground">
+                          </td>
+                          <td className="py-3 px-4">
+                            <Badge variant="outline" className="font-mono text-xs">
                               {patient?.vitalisId}
-                            </p>
+                            </Badge>
                           </td>
                           <td className="py-3 px-4">
                             <Badge variant="outline">
@@ -234,14 +231,11 @@ const ReceptionDashboard: React.FC = () => {
                                payment.type === 'lab' ? 'Laboratoire' : 'Pharmacie'}
                             </Badge>
                           </td>
-                          <td className="py-3 px-4 font-medium">
+                          <td className="py-3 px-4 font-medium text-success">
                             {payment.amount.toLocaleString()} FCFA
                           </td>
                           <td className="py-3 px-4">
                             <StatusBadge status={payment.status} />
-                          </td>
-                          <td className="py-3 px-4 text-right">
-                            <Button size="sm">Encaisser</Button>
                           </td>
                         </tr>
                       );
