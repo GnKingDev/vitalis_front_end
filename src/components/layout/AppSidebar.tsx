@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
 import { getNavigationForRole, getRoleLabel } from '@/config/navigation';
+import vitalisLogo from '@/assets/logo-vitalis.png';
 import {
   LayoutDashboard,
   UserPlus,
@@ -107,16 +108,12 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ isOpen, onToggle }) => {
       >
         {/* Logo */}
         <div className="flex items-center justify-between h-16 px-4 border-b border-sidebar-border">
-          <Link to="/dashboard" className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-sidebar-primary flex items-center justify-center">
-              <span className="text-xl font-bold text-sidebar-primary-foreground">V</span>
-            </div>
-            <div>
-              <h1 className="font-display text-lg font-bold text-sidebar-foreground">
-                VITALIS
-              </h1>
-              <p className="text-xs text-sidebar-foreground/60">Clinique Médicale</p>
-            </div>
+          <Link to="/dashboard" className="flex items-center">
+            <img 
+              src={vitalisLogo} 
+              alt="VITALIS" 
+              className="h-10 w-auto brightness-0 invert"
+            />
           </Link>
           <Button
             variant="ghost"
