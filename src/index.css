@@ -2,95 +2,130 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
+/* VITALIS Medical Clinic Design System
+   Clean, professional medical SaaS aesthetic
+   Primary: Teal/Cyan for trust and health
+   Accent: Green for success, Orange for warnings
 */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700&display=swap');
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-
+    /* Core backgrounds */
+    --background: 210 20% 98%;
+    --foreground: 215 25% 15%;
+    
+    /* Card surfaces */
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
-
+    --card-foreground: 215 25% 15%;
+    
+    /* Popover */
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
-
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
-
-    --radius: 0.5rem;
-
-    --sidebar-background: 0 0% 98%;
-
-    --sidebar-foreground: 240 5.3% 26.1%;
-
-    --sidebar-primary: 240 5.9% 10%;
-
-    --sidebar-primary-foreground: 0 0% 98%;
-
-    --sidebar-accent: 240 4.8% 95.9%;
-
-    --sidebar-accent-foreground: 240 5.9% 10%;
-
-    --sidebar-border: 220 13% 91%;
-
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --popover-foreground: 215 25% 15%;
+    
+    /* Primary: Medical Teal */
+    --primary: 187 72% 38%;
+    --primary-foreground: 0 0% 100%;
+    
+    /* Secondary: Soft blue-gray */
+    --secondary: 210 20% 96%;
+    --secondary-foreground: 215 25% 25%;
+    
+    /* Muted surfaces */
+    --muted: 210 15% 94%;
+    --muted-foreground: 215 15% 45%;
+    
+    /* Accent: Teal light */
+    --accent: 187 50% 92%;
+    --accent-foreground: 187 72% 30%;
+    
+    /* Destructive: Medical red */
+    --destructive: 0 72% 55%;
+    --destructive-foreground: 0 0% 100%;
+    
+    /* Borders and inputs */
+    --border: 214 20% 88%;
+    --input: 214 20% 88%;
+    --ring: 187 72% 38%;
+    
+    --radius: 0.625rem;
+    
+    /* Sidebar */
+    --sidebar-background: 215 30% 12%;
+    --sidebar-foreground: 210 20% 90%;
+    --sidebar-primary: 187 72% 50%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 215 25% 18%;
+    --sidebar-accent-foreground: 210 20% 95%;
+    --sidebar-border: 215 25% 20%;
+    --sidebar-ring: 187 72% 50%;
+    
+    /* Custom semantic colors for VITALIS */
+    --success: 152 60% 42%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+    --info: 205 85% 50%;
+    --info-foreground: 0 0% 100%;
+    
+    /* Status colors */
+    --status-pending: 38 92% 50%;
+    --status-active: 205 85% 50%;
+    --status-completed: 152 60% 42%;
+    --status-cancelled: 0 72% 55%;
+    
+    /* Role colors */
+    --role-admin: 262 60% 55%;
+    --role-reception: 205 85% 50%;
+    --role-doctor: 152 60% 42%;
+    --role-lab: 38 92% 50%;
+    --role-pharmacy: 187 72% 38%;
+    
+    /* Gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(187 72% 38%), hsl(187 72% 48%));
+    --gradient-sidebar: linear-gradient(180deg, hsl(215 30% 12%), hsl(215 35% 8%));
+    --gradient-card: linear-gradient(135deg, hsl(0 0% 100%), hsl(210 20% 98%));
+    --gradient-hero: linear-gradient(135deg, hsl(187 72% 38%), hsl(152 60% 42%));
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
+    --background: 215 30% 8%;
+    --foreground: 210 20% 95%;
+    
+    --card: 215 28% 12%;
+    --card-foreground: 210 20% 95%;
+    
+    --popover: 215 28% 12%;
+    --popover-foreground: 210 20% 95%;
+    
+    --primary: 187 72% 50%;
+    --primary-foreground: 215 30% 8%;
+    
+    --secondary: 215 25% 18%;
+    --secondary-foreground: 210 20% 90%;
+    
+    --muted: 215 25% 18%;
+    --muted-foreground: 215 15% 55%;
+    
+    --accent: 187 50% 20%;
+    --accent-foreground: 187 72% 70%;
+    
+    --destructive: 0 62% 45%;
+    --destructive-foreground: 0 0% 100%;
+    
+    --border: 215 25% 20%;
+    --input: 215 25% 20%;
+    --ring: 187 72% 50%;
+    
+    --sidebar-background: 215 35% 6%;
+    --sidebar-foreground: 210 20% 90%;
+    --sidebar-primary: 187 72% 50%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-accent: 215 30% 15%;
+    --sidebar-accent-foreground: 210 20% 95%;
+    --sidebar-border: 215 25% 15%;
+    --sidebar-ring: 187 72% 50%;
   }
 }
 
@@ -98,8 +133,116 @@ All colors MUST be HSL.
   * {
     @apply border-border;
   }
-
+  
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground antialiased;
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Plus Jakarta Sans', 'Inter', sans-serif;
+    @apply font-semibold tracking-tight;
+  }
+}
+
+@layer components {
+  /* Card variants */
+  .card-elevated {
+    @apply bg-card rounded-xl shadow-sm border border-border/50 
+           hover:shadow-md transition-shadow duration-200;
+  }
+  
+  .card-stats {
+    @apply bg-card rounded-xl p-6 border border-border/50 
+           hover:border-primary/20 transition-all duration-200;
+  }
+  
+  /* Status badges */
+  .badge-pending {
+    @apply bg-warning/10 text-warning border-warning/20;
+  }
+  
+  .badge-active {
+    @apply bg-info/10 text-info border-info/20;
+  }
+  
+  .badge-completed {
+    @apply bg-success/10 text-success border-success/20;
+  }
+  
+  .badge-cancelled {
+    @apply bg-destructive/10 text-destructive border-destructive/20;
+  }
+  
+  /* Role badges */
+  .badge-admin {
+    @apply bg-[hsl(262_60%_55%/0.1)] text-[hsl(262_60%_55%)] border-[hsl(262_60%_55%/0.2)];
+  }
+  
+  .badge-reception {
+    @apply bg-info/10 text-info border-info/20;
+  }
+  
+  .badge-doctor {
+    @apply bg-success/10 text-success border-success/20;
+  }
+  
+  .badge-lab {
+    @apply bg-warning/10 text-warning border-warning/20;
+  }
+  
+  .badge-pharmacy {
+    @apply bg-primary/10 text-primary border-primary/20;
+  }
+  
+  /* Print styles */
+  @media print {
+    .no-print {
+      display: none !important;
+    }
+    
+    .print-only {
+      display: block !important;
+    }
+    
+    body {
+      background: white !important;
+    }
+  }
+  
+  .print-only {
+    display: none;
+  }
+}
+
+@layer utilities {
+  /* Smooth scrollbar */
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--muted)) transparent;
+  }
+  
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: hsl(var(--muted-foreground) / 0.3);
+    border-radius: 3px;
+  }
+  
+  /* Glass effect */
+  .glass {
+    @apply bg-white/80 backdrop-blur-lg;
+  }
+  
+  /* Vitalis gradient text */
+  .text-gradient-vitalis {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-primary to-success;
   }
 }
