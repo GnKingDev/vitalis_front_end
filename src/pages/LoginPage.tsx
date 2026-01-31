@@ -5,6 +5,7 @@ import { getRoleLabel } from '@/config/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import type { UserRole } from '@/types';
+import vitalisLogo from '@/assets/logo-vitalis.png';
 import {
   Shield,
   UserPlus,
@@ -54,14 +55,12 @@ const LoginPage: React.FC = () => {
     <div className="min-h-screen bg-background flex flex-col">
       {/* Header */}
       <header className="py-6 px-4 sm:px-6">
-        <div className="max-w-7xl mx-auto flex items-center gap-3">
-          <div className="w-12 h-12 rounded-xl bg-primary flex items-center justify-center">
-            <span className="text-2xl font-bold text-primary-foreground">V</span>
-          </div>
-          <div>
-            <h1 className="font-display text-2xl font-bold text-foreground">VITALIS</h1>
-            <p className="text-sm text-muted-foreground">Clinique Médicale</p>
-          </div>
+        <div className="max-w-7xl mx-auto">
+          <img 
+            src={vitalisLogo} 
+            alt="VITALIS Clinique Médicale" 
+            className="h-14 w-auto"
+          />
         </div>
       </header>
 
