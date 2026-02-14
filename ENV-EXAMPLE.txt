@@ -1,0 +1,9 @@
+# Configuration des variables d'environnement
+# Copier ce fichier vers .env et modifier les valeurs selon votre environnement
+
+# URL du backend API
+# En développement, le backend devrait tourner sur le port 3000
+VITE_API_URL=http://localhost:3000
+
+# En production, utiliser l'URL complète du backend
+# VITE_API_URL=https://api.vitalis.com

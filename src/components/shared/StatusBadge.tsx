@@ -23,11 +23,8 @@ const statusConfig: Record<StatusType, { label: string; className: string }> = {
   completed: { label: 'Terminé', className: 'badge-completed' },
   
   // Lab Request
-  requested: { label: 'Demandé', className: 'badge-pending' },
-  pending_payment: { label: 'Attente paiement', className: 'badge-pending' },
-  assigned: { label: 'Assigné', className: 'badge-active' },
-  result_ready: { label: 'Résultat prêt', className: 'badge-completed' },
-  sent_to_doctor: { label: 'Envoyé médecin', className: 'badge-completed' },
+  pending: { label: 'En attente', className: 'badge-pending' },
+  sent_to_doctor: { label: 'Fini et envoyé au médecin', className: 'badge-completed' },
   
   // Prescription
   created: { label: 'Créée', className: 'badge-pending' },

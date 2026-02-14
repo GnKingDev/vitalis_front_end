@@ -6,11 +6,16 @@ import { Topbar } from './Topbar';
 import { cn } from '@/lib/utils';
 
 export const DashboardLayout: React.FC = () => {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   if (!isAuthenticated) {
     return <Navigate to="/" replace />;
+  }
+
+  // Rediriger vers la page de changement de mot de passe si nécessaire
+  if (user?.mustChangePassword) {
+    return <Navigate to="/change-password" replace />;
   }
 
   return (

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { StatsCard } from '@/components/shared/StatsCard';
@@ -14,32 +14,62 @@ import {
   Plus,
   ArrowRight,
   Phone,
-  Calendar,
 } from 'lucide-react';
-import {
-  mockPatients,
-  mockPayments,
-  mockDoctorAssignments,
-  mockUsers,
-} from '@/data/mockData';
 import { Link } from 'react-router-dom';
+import { getReceptionStats, getReceptionPatients, getReceptionAssignments } from '@/services/api/receptionService';
+import { getPayments } from '@/services/api/paymentsService';
+import { toast } from 'sonner';
 
 const ReceptionDashboard: React.FC = () => {
   const { user } = useAuth();
+  const [stats, setStats] = useState({
+    patientsToday: 0,
+    paymentsToday: 0,
+    pendingAssignments: 0,
+  });
+  const [patientsToday, setPatientsToday] = useState<any[]>([]);
+  const [pendingAssignments, setPendingAssignments] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Today's data
-  const today = new Date().toISOString().split('T')[0];
-  const patientsToday = mockPatients.filter(p => p.createdAt.startsWith('2026-01-31'));
-  const paymentsToday = mockPayments.filter(p => p.createdAt.startsWith('2026-01-31'));
-  
-  const pendingAssignments = mockDoctorAssignments.filter(d => d.status === 'assigned');
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        setIsLoading(true);
+        const today = new Date().toISOString().split('T')[0];
+        
+        // Charger les statistiques
+        const statsData = await getReceptionStats(today);
+        if (statsData.success && statsData.data) {
+          setStats(statsData.data);
+        }
 
-  const totalRevenue = paymentsToday
-    .filter(p => p.status === 'paid')
-    .reduce((sum, p) => sum + p.amount, 0);
+        // Charger les patients d'aujourd'hui
+        const patientsResponse = await getReceptionPatients({ date: today, limit: 4 });
+        if (patientsResponse.success && patientsResponse.data) {
+          setPatientsToday(patientsResponse.data.patients || patientsResponse.data || []);
+        }
 
-  const getPatient = (patientId: string) => mockPatients.find(p => p.id === patientId);
-  const getDoctor = (doctorId: string) => mockUsers.find(u => u.id === doctorId);
+        // Charger les assignations en attente
+        const assignmentsResponse = await getReceptionAssignments({ status: 'assigned' });
+        if (assignmentsResponse.success && assignmentsResponse.data) {
+          // S'assurer que c'est toujours un tableau
+          const assignmentsData = assignmentsResponse.data.assignments || assignmentsResponse.data;
+          setPendingAssignments(Array.isArray(assignmentsData) ? assignmentsData : []);
+        } else {
+          setPendingAssignments([]);
+        }
+      } catch (error: any) {
+        console.error('Erreur lors du chargement des données:', error);
+        toast.error('Erreur', {
+          description: 'Impossible de charger les données du dashboard',
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadData();
+  }, []);
 
   return (
     <div className="space-y-6">
@@ -56,31 +86,25 @@ const ReceptionDashboard: React.FC = () => {
       </PageHeader>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <StatsCard
           title="Patients enregistrés"
-          value={patientsToday.length}
+          value={stats.patientsToday || patientsToday.length}
           subtitle="Aujourd'hui"
           icon={Users}
           variant="primary"
         />
         <StatsCard
           title="Paiements reçus"
-          value={paymentsToday.filter(p => p.status === 'paid').length}
+          value={stats.paymentsToday || 0}
           icon={CreditCard}
           variant="success"
         />
         <StatsCard
           title="En attente d'assignation"
-          value={pendingAssignments.length}
+          value={stats.pendingAssignments || pendingAssignments.length}
           icon={UserCheck}
           variant="default"
-        />
-        <StatsCard
-          title="Revenus du jour"
-          value={`${totalRevenue.toLocaleString()} F`}
-          icon={CreditCard}
-          variant="success"
         />
       </div>
 
@@ -106,8 +130,8 @@ const ReceptionDashboard: React.FC = () => {
                 </div>
               ) : (
                 pendingAssignments.map((assignment, index) => {
-                  const patient = getPatient(assignment.patientId);
-                  const doctor = getDoctor(assignment.doctorId);
+                  const patient = assignment.patient || {};
+                  const doctor = assignment.doctor || {};
                   return (
                     <div
                       key={assignment.id}
@@ -119,15 +143,15 @@ const ReceptionDashboard: React.FC = () => {
                         </div>
                         <div>
                           <p className="font-medium">
-                            {patient?.firstName} {patient?.lastName}
+                            {patient.firstName} {patient.lastName}
                           </p>
                           <p className="text-sm text-muted-foreground">
-                            {patient?.vitalisId}
+                            {patient.vitalisId}
                           </p>
                         </div>
                       </div>
                       <div className="text-right">
-                        <p className="text-sm font-medium">{doctor?.name}</p>
+                        <p className="text-sm font-medium">{doctor.name || 'Non assigné'}</p>
                         <StatusBadge status="waiting" />
                       </div>
                     </div>
@@ -152,7 +176,7 @@ const ReceptionDashboard: React.FC = () => {
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {mockPatients.slice(0, 4).map((patient) => (
+              {patientsToday.slice(0, 4).map((patient) => (
                 <div
                   key={patient.id}
                   className="flex items-center justify-between p-3 rounded-lg hover:bg-secondary/50 transition-colors"
@@ -181,69 +205,6 @@ const ReceptionDashboard: React.FC = () => {
                 </div>
               ))}
             </div>
-          </CardContent>
-        </Card>
-
-        {/* Today's paid consultations */}
-        <Card className="lg:col-span-2">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-lg font-semibold flex items-center gap-2">
-              <CreditCard className="h-5 w-5 text-success" />
-              Paiements du jour
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {paymentsToday.filter(p => p.status === 'paid').length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                <CreditCard className="h-12 w-12 mx-auto mb-3 opacity-30" />
-                <p>Aucun paiement aujourd'hui</p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b">
-                      <th className="text-left py-3 px-4 font-medium text-muted-foreground">Patient</th>
-                      <th className="text-left py-3 px-4 font-medium text-muted-foreground">ID Vitalis</th>
-                      <th className="text-left py-3 px-4 font-medium text-muted-foreground">Type</th>
-                      <th className="text-left py-3 px-4 font-medium text-muted-foreground">Montant</th>
-                      <th className="text-left py-3 px-4 font-medium text-muted-foreground">Statut</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {paymentsToday.filter(p => p.status === 'paid').map((payment) => {
-                      const patient = getPatient(payment.patientId);
-                      return (
-                        <tr key={payment.id} className="border-b hover:bg-secondary/30">
-                          <td className="py-3 px-4">
-                            <p className="font-medium">
-                              {patient?.firstName} {patient?.lastName}
-                            </p>
-                          </td>
-                          <td className="py-3 px-4">
-                            <Badge variant="outline" className="font-mono text-xs">
-                              {patient?.vitalisId}
-                            </Badge>
-                          </td>
-                          <td className="py-3 px-4">
-                            <Badge variant="outline">
-                              {payment.type === 'consultation' ? 'Consultation' : 
-                               payment.type === 'lab' ? 'Laboratoire' : 'Pharmacie'}
-                            </Badge>
-                          </td>
-                          <td className="py-3 px-4 font-medium text-success">
-                            {payment.amount.toLocaleString()} FCFA
-                          </td>
-                          <td className="py-3 px-4">
-                            <StatusBadge status={payment.status} />
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
           </CardContent>
         </Card>
       </div>

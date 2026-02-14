@@ -245,4 +245,12 @@
   .text-gradient-vitalis {
     @apply bg-clip-text text-transparent bg-gradient-to-r from-primary to-success;
   }
+  
+  /* Grid pattern for login page */
+  .bg-grid-pattern {
+    background-image: 
+      linear-gradient(to right, rgba(0, 0, 0, 0.03) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(0, 0, 0, 0.03) 1px, transparent 1px);
+    background-size: 20px 20px;
+  }
 }

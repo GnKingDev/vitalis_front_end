@@ -1,0 +1,551 @@
+import React, { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { useAuth } from '@/contexts/AuthContext';
+import { PageHeader } from '@/components/shared/PageHeader';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { toast } from 'sonner';
+import {
+  ArrowLeft,
+  User,
+  FileText,
+  FlaskConical,
+  Eye,
+  Send,
+  Printer,
+  Calendar,
+  Stethoscope,
+  CreditCard,
+  ListChecks,
+} from 'lucide-react';
+import { getLabRequestById, saveLabResult, validateLabResult, sendLabResult, getLabResultById } from '@/services/api/labService';
+import LabResultsFormComplete from '@/components/lab/LabResultsFormComplete';
+import type { LabResultData } from '@/components/lab/LabResultsFormComplete';
+
+const LabRequestDetailPage: React.FC = () => {
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const [activeTab, setActiveTab] = useState('exams');
+  const [labRequest, setLabRequest] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [savedResults, setSavedResults] = useState<LabResultData | null>(null);
+  const [isSending, setIsSending] = useState(false);
+
+  // Load lab request from API
+  useEffect(() => {
+    const loadLabRequest = async () => {
+      if (!id) return;
+
+      try {
+        setIsLoading(true);
+        const response = await getLabRequestById(id);
+
+        if (response.success && response.data) {
+          setLabRequest(response.data);
+        } else {
+          setLabRequest(null);
+        }
+      } catch (error: any) {
+        console.error('Erreur lors du chargement de la demande:', error);
+        toast.error('Erreur', {
+          description: 'Impossible de charger la demande de laboratoire',
+        });
+        setLabRequest(null);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadLabRequest();
+  }, [id]);
+
+  // Extract patient and doctor from labRequest
+  const patient = labRequest?.patient || null;
+  const doctor = labRequest?.doctor || null;
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Chargement..." description="Chargement de la demande" />
+        <Card>
+          <CardContent className="py-12 text-center">
+            <p className="text-muted-foreground">Chargement des données...</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Check if request exists
+  if (!labRequest) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Demande introuvable" description="Cette demande n'existe pas" />
+        <Card>
+          <CardContent className="py-12 text-center">
+            <p className="text-muted-foreground mb-4">La demande de laboratoire est introuvable.</p>
+            <p className="text-sm text-muted-foreground mb-4">ID recherché : {id}</p>
+            <Button onClick={() => navigate('/lab/requests')} variant="outline">
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Retour à la liste
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Check if patient exists
+  if (!patient) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Patient introuvable" description="Le patient associé à cette demande n'existe pas" />
+        <Card>
+          <CardContent className="py-12 text-center">
+            <p className="text-muted-foreground mb-4">Le patient associé à cette demande est introuvable.</p>
+            <Button onClick={() => navigate('/lab/requests')} variant="outline">
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Retour à la liste
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Check if request can be accessed (must be paid - have paymentId or payment.status === 'paid')
+  // For lab role, only show requests that have been paid
+  const isPaid = labRequest.paymentId || 
+                 labRequest.payment?.id || 
+                 labRequest.payment?.status === 'paid' ||
+                 labRequest.status === 'paid';
+  
+  if (user?.role === 'lab' && !isPaid) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Demande non disponible" description="Cette demande ne peut pas être traitée" />
+        <Card>
+          <CardContent className="py-12 text-center">
+            <p className="text-muted-foreground mb-4">
+              Cette demande n'est pas encore payée. Elle ne peut pas être traitée pour le moment.
+            </p>
+            <Button onClick={() => navigate('/lab/requests')} variant="outline">
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Retour à la liste
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Calculate age
+  const calculateAge = (dateOfBirth: string | null | undefined) => {
+    if (!dateOfBirth) return 'N/A';
+    try {
+      const birth = new Date(dateOfBirth);
+      const today = new Date();
+      let age = today.getFullYear() - birth.getFullYear();
+      const monthDiff = today.getMonth() - birth.getMonth();
+      if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
+        age--;
+      }
+      return age;
+    } catch {
+      return 'N/A';
+    }
+  };
+
+  const handleSendToDoctor = async () => {
+    if (!labRequest || !id) return;
+
+    // Vérifier qu'on a un résultat sauvegardé
+    let resultId = labRequest.results?.id;
+    
+    // Si pas de résultat ID mais qu'on a des résultats sauvegardés, sauvegarder d'abord
+    if (!resultId && savedResults) {
+      try {
+        // Transformer les données au format API
+        const sections = labRequest.exams.map((exam: any) => {
+          const examName = exam.name || exam.labExam?.name || 'Examen';
+          const parameters = savedResults.examResults[exam.id] || [];
+          
+          return {
+            title: examName,
+            items: parameters.map((param: any) => ({
+              name: param.parameterName || '',
+              value: param.value || '',
+              unit: param.unit || '',
+              reference: param.referenceRange || '',
+              status: param.alert === 'normal' ? 'normal' : 
+                      param.alert === 'high' ? 'high' : 
+                      param.alert === 'low' ? 'low' : null,
+            })),
+          };
+        });
+
+        const resultData = {
+          labRequestId: labRequest.id,
+          results: { sections },
+          technicianNotes: savedResults.labComments || savedResults.interpretation || undefined,
+        };
+
+        const saveResponse = await saveLabResult(resultData);
+        
+        if (saveResponse.success && saveResponse.data?.id) {
+          resultId = saveResponse.data.id;
+        } else {
+          throw new Error('Impossible de sauvegarder les résultats');
+        }
+      } catch (error: any) {
+        console.error('Erreur lors de la sauvegarde:', error);
+        toast.error('Erreur', {
+          description: error?.message || 'Impossible de sauvegarder les résultats',
+        });
+        return;
+      }
+    }
+
+    if (!resultId) {
+      toast.error('Erreur', {
+        description: 'Veuillez d\'abord sauvegarder les résultats avant de les envoyer au médecin',
+      });
+      return;
+    }
+
+    try {
+      setIsSending(true);
+
+      // Vérifier le statut du résultat
+      const resultResponse = await getLabResultById(resultId);
+      const currentResult = resultResponse.data;
+      
+      // Si le résultat est en draft, le valider d'abord
+      if (currentResult?.status === 'draft') {
+        await validateLabResult(resultId);
+        toast.success('Résultats validés', {
+          description: 'Les résultats ont été validés',
+        });
+      }
+
+      // Envoyer au médecin (peut être fait même si déjà validé)
+      if (currentResult?.status !== 'sent') {
+        await sendLabResult(resultId);
+      }
+
+      // Recharger la demande pour avoir le statut à jour
+      const response = await getLabRequestById(id);
+      if (response.success && response.data) {
+        setLabRequest(response.data);
+      }
+
+      toast.success('Succès', {
+        description: 'Résultats envoyés au médecin avec succès',
+      });
+    } catch (error: any) {
+      console.error('Erreur lors de l\'envoi au médecin:', error);
+      toast.error('Erreur', {
+        description: error?.message || 'Impossible d\'envoyer les résultats au médecin',
+      });
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  const handlePrint = () => {
+    window.print();
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Header with back button */}
+      <div className="flex items-start gap-4">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => navigate('/lab/requests')}
+          className="gap-2 mt-1"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Retour
+        </Button>
+        <div className="flex-1">
+          <PageHeader
+            title={`Demande Labo - ${labRequest.id}`}
+            description="Détail de la demande de laboratoire"
+          />
+        </div>
+      </div>
+
+      {/* Patient Identification Card */}
+      <Card className="border-2 border-primary/20">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <User className="h-5 w-5 text-primary" />
+            Identification du patient
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div>
+              <Label className="text-xs text-muted-foreground">Nom du patient</Label>
+              <p className="font-semibold text-lg">
+                {patient.firstName || ''} {patient.lastName || ''}
+              </p>
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground">Âge</Label>
+              <p className="font-medium">
+                {patient.dateOfBirth ? `${calculateAge(patient.dateOfBirth)} ans` : patient.age ? `${patient.age} ans` : 'N/A'}
+              </p>
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground">ID Patient Vitalis</Label>
+              <Badge variant="outline" className="font-mono mt-1">
+                {patient.vitalisId || 'N/A'}
+              </Badge>
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground">N° Labo</Label>
+              <Badge variant="outline" className="font-mono mt-1">
+                {labRequest.id}
+              </Badge>
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground">Date de service</Label>
+              <p className="font-medium flex items-center gap-2 mt-1">
+                <Calendar className="h-4 w-4" />
+                {new Date(labRequest.createdAt).toLocaleDateString('fr-FR', {
+                  day: '2-digit',
+                  month: '2-digit',
+                  year: 'numeric',
+                })}
+              </p>
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground">Demandé par</Label>
+              <p className="font-medium flex items-center gap-2 mt-1">
+                <Stethoscope className="h-4 w-4" />
+                {doctor?.name || 'N/A'}
+              </p>
+            </div>
+          </div>
+          <div className="mt-4 pt-4 border-t">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <span>Rapport préparé par :</span>
+              <span className="font-semibold text-foreground">Laboratoire Vitalis</span>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Tabs */}
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="exams" className="gap-2">
+            <ListChecks className="h-4 w-4" />
+            <span className="hidden sm:inline">Examens demandés</span>
+          </TabsTrigger>
+          <TabsTrigger value="results" className="gap-2">
+            <FlaskConical className="h-4 w-4" />
+            <span className="hidden sm:inline">Saisie résultats</span>
+          </TabsTrigger>
+        </TabsList>
+
+        {/* Exams Tab - Display requested exams */}
+        <TabsContent value="exams" className="mt-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <ListChecks className="h-5 w-5 text-primary" />
+                Examens demandés par le médecin
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {labRequest.exams && labRequest.exams.length > 0 ? (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {labRequest.exams.map((exam: any, index: number) => {
+                      const examName = exam.name || exam.labExam?.name || 'Examen';
+                      const examCategory = exam.category || exam.labExam?.category || '';
+                      const examPrice = exam.price || exam.labExam?.price || '0';
+                      const examId = exam.id || exam.labExamId || index;
+                      
+                      return (
+                        <Card key={examId} className="border-2 border-primary/20">
+                          <CardContent className="p-4">
+                            <div className="flex items-start justify-between mb-3">
+                              <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                                  <span className="text-sm font-bold text-primary">
+                                    {index + 1}
+                                  </span>
+                                </div>
+                                <div>
+                                  <p className="font-semibold text-lg">{examName}</p>
+                                  {examCategory && (
+                                    <p className="text-sm text-muted-foreground">{examCategory}</p>
+                                  )}
+                                </div>
+                              </div>
+                              <Badge variant="outline" className="font-medium">
+                                {parseFloat(examPrice).toLocaleString('fr-FR')} GNF
+                              </Badge>
+                            </div>
+                            <div className="mt-3 pt-3 border-t">
+                              <p className="text-xs text-muted-foreground">
+                                Examen demandé par le médecin pour cette consultation
+                              </p>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                  <div className="mt-6 p-4 bg-primary/5 rounded-lg border border-primary/20">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-muted-foreground">Total des examens</p>
+                        <p className="text-2xl font-bold text-primary">
+                          {labRequest.exams.length} examen{labRequest.exams.length > 1 ? 's' : ''}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm text-muted-foreground">Montant total</p>
+                        <p className="text-2xl font-bold text-primary">
+                          {labRequest.totalAmount 
+                            ? parseFloat(labRequest.totalAmount).toLocaleString('fr-FR')
+                            : '0'} GNF
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="mt-4">
+                    <Button
+                      onClick={() => setActiveTab('results')}
+                      className="w-full md:w-auto"
+                      size="lg"
+                    >
+                      <FlaskConical className="h-4 w-4 mr-2" />
+                      Commencer la saisie des résultats
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-8 text-muted-foreground">
+                  <FlaskConical className="h-12 w-12 mx-auto mb-3 opacity-30" />
+                  <p>Aucun examen demandé pour cette consultation</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Results Tab - Now includes both edit and preview modes */}
+        <TabsContent value="results" className="mt-6">
+          <LabResultsFormComplete
+            labRequest={labRequest}
+            patient={patient}
+            doctor={doctor}
+            onSave={async (data) => {
+              try {
+                // Transformer les données au format API attendu
+                // Format: { sections: [{ title: "...", items: [...] }] }
+                const sections = labRequest.exams.map((exam: any) => {
+                  const examName = exam.name || exam.labExam?.name || 'Examen';
+                  const parameters = data.examResults[exam.id] || [];
+                  
+                  return {
+                    title: examName,
+                    items: parameters.map((param: any) => ({
+                      name: param.parameterName || '',
+                      value: param.value || '',
+                      unit: param.unit || '',
+                      reference: param.referenceRange || '',
+                      status: param.alert === 'normal' ? 'normal' : 
+                              param.alert === 'high' ? 'high' : 
+                              param.alert === 'low' ? 'low' : null,
+                    })),
+                  };
+                });
+
+                // Sauvegarder les résultats au backend
+                const resultData = {
+                  labRequestId: labRequest.id,
+                  results: { sections },
+                  technicianNotes: data.labComments || data.interpretation || undefined,
+                };
+
+                const response = await saveLabResult(resultData);
+                
+                if (response.success) {
+                  setSavedResults(data);
+                  
+                  toast.success('Succès', {
+                    description: 'Résultats enregistrés avec succès',
+                  });
+
+                  // Recharger la demande pour avoir les résultats à jour
+                  const reloadResponse = await getLabRequestById(id!);
+                  if (reloadResponse.success && reloadResponse.data) {
+                    setLabRequest(reloadResponse.data);
+                  }
+                } else {
+                  throw new Error(response.message || 'Erreur lors de la sauvegarde');
+                }
+              } catch (error: any) {
+                console.error('Erreur lors de la sauvegarde:', error);
+                toast.error('Erreur', {
+                  description: error?.message || 'Impossible d\'enregistrer les résultats',
+                });
+              }
+            }}
+          />
+        </TabsContent>
+
+        {/* Preview Tab - Removed, now integrated in form */}
+        <TabsContent value="preview" className="mt-6">
+          <Card>
+            <CardContent className="py-12 text-center text-muted-foreground">
+              <p>Le mode Aperçu est maintenant intégré dans l'onglet "Saisie résultats"</p>
+              <p className="text-sm mt-2">Utilisez le switch Édition/Aperçu pour basculer entre les modes</p>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+
+      {/* Action Buttons */}
+      <Card>
+        <CardContent className="py-4">
+          <div className="flex flex-wrap gap-3">
+            <Button
+              onClick={handleSendToDoctor}
+              className="gap-2"
+              disabled={labRequest.status === 'sent_to_doctor' || isSending}
+            >
+              <Send className="h-4 w-4" />
+              {isSending ? 'Envoi en cours...' : 'Envoyer au médecin'}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handlePrint}
+              className="gap-2"
+            >
+              <Printer className="h-4 w-4" />
+              Imprimer résultat
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+};
+
+export default LabRequestDetailPage;

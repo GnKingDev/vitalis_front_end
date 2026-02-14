@@ -25,6 +25,10 @@ import {
   Settings,
   BarChart3,
   FolderOpen,
+  Scan,
+  Tag,
+  Bed,
+  DollarSign,
   ChevronDown,
   ChevronRight,
   LogOut,
@@ -59,6 +63,10 @@ const iconMap: Record<string, React.ElementType> = {
   Settings,
   BarChart3,
   FolderOpen,
+  Scan,
+  Tag,
+  Bed,
+  DollarSign,
 };
 
 interface AppSidebarProps {

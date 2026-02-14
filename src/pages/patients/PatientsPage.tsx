@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { PatientTimeline } from '@/components/shared/PatientTimeline';
@@ -14,6 +15,15 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+  PaginationEllipsis,
+} from '@/components/ui/pagination';
+import {
   Search,
   User,
   Phone,
@@ -21,45 +31,184 @@ import {
   MapPin,
   Clock,
   FileText,
-  Activity,
   TestTube2,
   Pill,
   X,
+  FolderOpen,
+  Download,
 } from 'lucide-react';
-import {
-  mockPatients,
-  mockConsultations,
-  mockLabRequests,
-  mockPrescriptions,
-  mockUsers,
-  getPatientTimeline,
-} from '@/data/mockData';
+import { toast } from 'sonner';
+import { getPatients, getPatientById, getPatientDossiers, getPatientTimeline, getPatientConsultations, getPatientPrescriptions, exportPatients } from '@/services/api/patientsService';
+import { getConsultations } from '@/services/api/consultationsService';
+import { getLabRequests } from '@/services/api/labService';
+import type { Patient } from '@/types';
 
 const PatientsPage: React.FC = () => {
+  const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
+  const [appliedSearch, setAppliedSearch] = useState('');
   const [selectedPatient, setSelectedPatient] = useState<string | null>(null);
+  const [patients, setPatients] = useState<Patient[]>([]);
+  const [selectedPatientData, setSelectedPatientData] = useState<Patient | null>(null);
+  const [dossiers, setDossiers] = useState<any[]>([]);
+  const [timeline, setTimeline] = useState<any[]>([]);
+  const [consultations, setConsultations] = useState<any[]>([]);
+  const [labRequests, setLabRequests] = useState<any[]>([]);
+  const [prescriptions, setPrescriptions] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingDetails, setIsLoadingDetails] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
+  const itemsPerPage = 12; // 12 patients par page (3 colonnes x 4 lignes)
+  const isReception = user?.role === 'reception';
+  const isAdmin = user?.role === 'admin';
 
-  const filteredPatients = mockPatients.filter((patient) => {
-    const query = searchQuery.toLowerCase();
-    return (
-      patient.firstName.toLowerCase().includes(query) ||
-      patient.lastName.toLowerCase().includes(query) ||
-      patient.vitalisId.toLowerCase().includes(query) ||
-      patient.phone.includes(query)
-    );
-  });
+  // Load patients list
+  useEffect(() => {
+    const loadPatients = async () => {
+      setIsLoading(true);
+      try {
+        const response = await getPatients({
+          page: currentPage,
+          limit: itemsPerPage,
+          search: appliedSearch || undefined,
+        });
+        if (response.success && response.data) {
+          setPatients(response.data.patients || []);
+          if (response.data.pagination) {
+            setTotalPages(response.data.pagination.totalPages || 1);
+            setTotalItems(response.data.pagination.totalItems || 0);
+          }
+        }
+      } catch (error) {
+        console.error('Error loading patients:', error);
+        toast.error('Erreur lors du chargement des patients');
+      } finally {
+        setIsLoading(false);
+      }
+    };
 
-  const getPatientConsultations = (patientId: string) =>
-    mockConsultations.filter((c) => c.patientId === patientId);
+    loadPatients();
+  }, [appliedSearch, currentPage]);
 
-  const getPatientLabRequests = (patientId: string) =>
-    mockLabRequests.filter((l) => l.patientId === patientId);
+  // Load patient details when selected
+  useEffect(() => {
+    const loadPatientDetails = async () => {
+      if (!selectedPatient) {
+        setSelectedPatientData(null);
+        setDossiers([]);
+        setTimeline([]);
+        setConsultations([]);
+        setLabRequests([]);
+        setPrescriptions([]);
+        return;
+      }
 
-  const getPatientPrescriptions = (patientId: string) =>
-    mockPrescriptions.filter((p) => p.patientId === patientId);
+      setIsLoadingDetails(true);
+      try {
+        // Load patient data
+        const patientResponse = await getPatientById(selectedPatient);
+        if (patientResponse.success && patientResponse.data) {
+          setSelectedPatientData(patientResponse.data);
+        }
 
-  const getDoctorName = (doctorId: string) =>
-    mockUsers.find((u) => u.id === doctorId)?.name || 'Inconnu';
+        // Load dossiers
+        const dossiersResponse = await getPatientDossiers(selectedPatient);
+        if (dossiersResponse.success && dossiersResponse.data) {
+          setDossiers(dossiersResponse.data);
+        }
+
+        // Load timeline
+        const timelineResponse = await getPatientTimeline(selectedPatient, !isReception);
+        if (timelineResponse.success && timelineResponse.data) {
+          setTimeline(timelineResponse.data);
+        }
+
+        // Load consultations
+        const consultationsResponse = await getPatientConsultations(selectedPatient);
+        if (consultationsResponse.success && consultationsResponse.data) {
+          setConsultations(consultationsResponse.data);
+        }
+
+        // Load lab requests (only if not reception)
+        if (!isReception) {
+          const labResponse = await getLabRequests({ patientId: selectedPatient });
+          if (labResponse.success && labResponse.data) {
+            setLabRequests(labResponse.data.requests || labResponse.data || []);
+          }
+        }
+
+        // Load prescriptions
+        const prescriptionsResponse = await getPatientPrescriptions(selectedPatient);
+        if (prescriptionsResponse.success && prescriptionsResponse.data) {
+          setPrescriptions(prescriptionsResponse.data);
+        }
+      } catch (error) {
+        console.error('Error loading patient details:', error);
+        toast.error('Erreur lors du chargement des détails du patient');
+      } finally {
+        setIsLoadingDetails(false);
+      }
+    };
+
+    loadPatientDetails();
+  }, [selectedPatient, isReception]);
+
+  // Apply search
+  const handleApplySearch = () => {
+    setAppliedSearch(searchQuery);
+    setCurrentPage(1); // Reset to first page when searching
+  };
+
+  // Reset search
+  const handleResetSearch = () => {
+    setSearchQuery('');
+    setAppliedSearch('');
+    setCurrentPage(1); // Reset to first page when resetting search
+  };
+
+  // Get page numbers for pagination
+  const getPageNumbers = (): (number | 'ellipsis')[] => {
+    const pages: (number | 'ellipsis')[] = [];
+    const maxVisible = 7;
+
+    if (totalPages <= maxVisible) {
+      for (let i = 1; i <= totalPages; i++) {
+        pages.push(i);
+      }
+    } else {
+      if (currentPage <= 3) {
+        for (let i = 1; i <= 4; i++) {
+          pages.push(i);
+        }
+        pages.push('ellipsis');
+        pages.push(totalPages);
+      } else if (currentPage >= totalPages - 2) {
+        pages.push(1);
+        pages.push('ellipsis');
+        for (let i = totalPages - 3; i <= totalPages; i++) {
+          pages.push(i);
+        }
+      } else {
+        pages.push(1);
+        pages.push('ellipsis');
+        for (let i = currentPage - 1; i <= currentPage + 1; i++) {
+          pages.push(i);
+        }
+        pages.push('ellipsis');
+        pages.push(totalPages);
+      }
+    }
+    return pages;
+  };
+
+  // Handle Enter key
+  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      handleApplySearch();
+    }
+  };
 
   const calculateAge = (dateOfBirth: string) => {
     const birth = new Date(dateOfBirth);
@@ -72,35 +221,70 @@ const PatientsPage: React.FC = () => {
     return age;
   };
 
-  const selectedPatientData = selectedPatient
-    ? mockPatients.find((p) => p.id === selectedPatient)
-    : null;
+  const handleExportExcel = async () => {
+    try {
+      const blob = await exportPatients({
+        search: appliedSearch || undefined,
+      });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `patients-${new Date().toISOString().split('T')[0]}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      toast.success('Export réussi');
+    } catch (error) {
+      console.error('Error exporting patients:', error);
+      toast.error('Erreur lors de l\'export');
+    }
+  };
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Dossiers patients"
         description="Consultez l'historique complet des patients"
-      />
+      >
+        {isAdmin && (
+          <Button onClick={handleExportExcel} className="gap-2">
+            <Download className="h-4 w-4" />
+            Exporter en Excel
+          </Button>
+        )}
+      </PageHeader>
 
       {/* Search */}
       <Card>
         <CardContent className="py-4">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Rechercher par ID, nom ou téléphone..."
-              className="pl-10"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Rechercher par ID, nom ou téléphone..."
+                className="pl-10"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyPress={handleKeyPress}
+              />
+            </div>
+            <Button onClick={handleApplySearch} className="gap-2">
+              <Search className="h-4 w-4" />
+              Rechercher
+            </Button>
           </div>
         </CardContent>
       </Card>
 
       {/* Patients grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filteredPatients.map((patient) => (
+      {isLoading ? (
+        <div className="text-center py-12">
+          <p className="text-muted-foreground">Chargement...</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {patients.map((patient) => (
           <Card
             key={patient.id}
             className="cursor-pointer hover:shadow-md transition-shadow"
@@ -134,13 +318,66 @@ const PatientsPage: React.FC = () => {
               </div>
             </CardContent>
           </Card>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
 
-      {filteredPatients.length === 0 && (
+      {!isLoading && patients.length === 0 && (
         <div className="text-center py-12">
           <User className="h-12 w-12 mx-auto mb-4 text-muted-foreground/30" />
           <p className="text-muted-foreground">Aucun patient trouvé</p>
+        </div>
+      )}
+
+      {/* Pagination */}
+      {!isLoading && totalPages > 1 && (
+        <div className="flex items-center justify-between mt-6">
+          <div className="text-sm text-muted-foreground">
+            Affichage de {(currentPage - 1) * itemsPerPage + 1} à {Math.min(currentPage * itemsPerPage, totalItems)} sur {totalItems} patient(s)
+          </div>
+          <Pagination>
+            <PaginationContent>
+              <PaginationItem>
+                <PaginationPrevious
+                  href="#"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    if (currentPage > 1) setCurrentPage(currentPage - 1);
+                  }}
+                  className={currentPage === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                />
+              </PaginationItem>
+              {getPageNumbers().map((page, index) => (
+                <PaginationItem key={index}>
+                  {page === 'ellipsis' ? (
+                    <PaginationEllipsis />
+                  ) : (
+                    <PaginationLink
+                      href="#"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        setCurrentPage(page as number);
+                      }}
+                      isActive={currentPage === page}
+                      className="cursor-pointer"
+                    >
+                      {page}
+                    </PaginationLink>
+                  )}
+                </PaginationItem>
+              ))}
+              <PaginationItem>
+                <PaginationNext
+                  href="#"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    if (currentPage < totalPages) setCurrentPage(currentPage + 1);
+                  }}
+                  className={currentPage === totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                />
+              </PaginationItem>
+            </PaginationContent>
+          </Pagination>
         </div>
       )}
 
@@ -198,20 +435,15 @@ const PatientsPage: React.FC = () => {
                     <p className="text-sm font-medium">{selectedPatientData.phone}</p>
                   </div>
                 </div>
-                {selectedPatientData.bloodType && (
-                  <div className="flex items-center gap-2">
-                    <Activity className="h-4 w-4 text-destructive" />
-                    <div>
-                      <p className="text-xs text-muted-foreground">Groupe sanguin</p>
-                      <p className="text-sm font-medium">{selectedPatientData.bloodType}</p>
-                    </div>
-                  </div>
-                )}
               </div>
 
               {/* Tabs for history */}
-              <Tabs defaultValue="timeline">
-                <TabsList className="grid w-full grid-cols-4">
+              <Tabs defaultValue="dossiers">
+                <TabsList className={`grid w-full ${isReception ? 'grid-cols-4' : 'grid-cols-5'}`}>
+                  <TabsTrigger value="dossiers" className="gap-1">
+                    <FolderOpen className="h-4 w-4" />
+                    <span className="hidden sm:inline">Dossiers</span>
+                  </TabsTrigger>
                   <TabsTrigger value="timeline" className="gap-1">
                     <Clock className="h-4 w-4" />
                     <span className="hidden sm:inline">Parcours</span>
@@ -220,15 +452,110 @@ const PatientsPage: React.FC = () => {
                     <FileText className="h-4 w-4" />
                     <span className="hidden sm:inline">Consultations</span>
                   </TabsTrigger>
-                  <TabsTrigger value="lab" className="gap-1">
-                    <TestTube2 className="h-4 w-4" />
-                    <span className="hidden sm:inline">Labo</span>
-                  </TabsTrigger>
+                  {!isReception && (
+                    <TabsTrigger value="lab" className="gap-1">
+                      <TestTube2 className="h-4 w-4" />
+                      <span className="hidden sm:inline">Labo</span>
+                    </TabsTrigger>
+                  )}
                   <TabsTrigger value="prescriptions" className="gap-1">
                     <Pill className="h-4 w-4" />
                     <span className="hidden sm:inline">Ordonnances</span>
                   </TabsTrigger>
                 </TabsList>
+
+                <TabsContent value="dossiers" className="mt-4">
+                  {isLoadingDetails ? (
+                    <div className="text-center py-8">
+                      <p className="text-muted-foreground">Chargement...</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {dossiers.map((dossier) => {
+                        const consultation = dossier.consultation || null;
+                      const getStatusLabel = (status: string) => {
+                        switch (status) {
+                          case 'active':
+                            return { label: 'Actif', variant: 'default' as const };
+                          case 'completed':
+                            return { label: 'Terminé', variant: 'secondary' as const };
+                          case 'archived':
+                            return { label: 'Archivé', variant: 'outline' as const };
+                          default:
+                            return { label: status, variant: 'outline' as const };
+                        }
+                      };
+                      const statusInfo = getStatusLabel(dossier.status);
+                      return (
+                        <Card key={dossier.id}>
+                          <CardContent className="py-4">
+                            <div className="flex items-start justify-between mb-2">
+                              <div>
+                                <p className="font-medium">
+                                  Dossier du {new Date(dossier.createdAt).toLocaleDateString('fr-FR', {
+                                    day: 'numeric',
+                                    month: 'long',
+                                    year: 'numeric',
+                                  })}
+                                </p>
+                                <p className="text-sm text-muted-foreground">
+                                  Médecin: {dossier.doctor?.name || dossier.doctorName || 'Inconnu'}
+                                </p>
+                                {dossier.completedAt && (
+                                  <p className="text-xs text-muted-foreground mt-1">
+                                    Terminé le:{' '}
+                                    {new Date(dossier.completedAt).toLocaleDateString('fr-FR')}
+                                  </p>
+                                )}
+                                {dossier.archivedAt && (
+                                  <p className="text-xs text-muted-foreground mt-1">
+                                    Archivé le:{' '}
+                                    {new Date(dossier.archivedAt).toLocaleDateString('fr-FR')}
+                                  </p>
+                                )}
+                              </div>
+                              <Badge variant={statusInfo.variant}>{statusInfo.label}</Badge>
+                            </div>
+                            {consultation && (
+                              <div className="mt-3 p-2 bg-secondary/50 rounded">
+                                {consultation.diagnosis && (
+                                  <p className="text-sm">
+                                    <strong>Diagnostic:</strong> {consultation.diagnosis}
+                                  </p>
+                                )}
+                                {consultation.symptoms && (
+                                  <p className="text-xs text-muted-foreground mt-1">
+                                    <strong>Symptômes:</strong> {consultation.symptoms}
+                                  </p>
+                                )}
+                              </div>
+                            )}
+                            <div className="mt-2 flex gap-2 text-xs text-muted-foreground">
+                              {dossier.labRequestIds && dossier.labRequestIds.length > 0 && (
+                                <span className="flex items-center gap-1">
+                                  <TestTube2 className="h-3 w-3" />
+                                  {dossier.labRequestIds.length} examen(s)
+                                </span>
+                              )}
+                              {dossier.prescriptionIds && dossier.prescriptionIds.length > 0 && (
+                                <span className="flex items-center gap-1">
+                                  <Pill className="h-3 w-3" />
+                                  {dossier.prescriptionIds.length} ordonnance(s)
+                                </span>
+                              )}
+                            </div>
+                          </CardContent>
+                        </Card>
+                      );
+                      })}
+                      {dossiers.length === 0 && (
+                        <p className="text-center text-muted-foreground py-8">
+                          Aucun dossier trouvé
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </TabsContent>
 
                 <TabsContent value="timeline" className="mt-4">
                   <Card>
@@ -236,121 +563,149 @@ const PatientsPage: React.FC = () => {
                       <CardTitle className="text-sm">Historique du parcours</CardTitle>
                     </CardHeader>
                     <CardContent>
-                      <PatientTimeline
-                        events={getPatientTimeline(selectedPatientData.id)}
-                      />
+                      {isLoadingDetails ? (
+                        <p className="text-center text-muted-foreground py-8">Chargement...</p>
+                      ) : (
+                        <PatientTimeline
+                          events={
+                            isReception
+                              ? timeline.filter((e) => e.type !== 'lab_results')
+                              : timeline
+                          }
+                        />
+                      )}
                     </CardContent>
                   </Card>
                 </TabsContent>
 
                 <TabsContent value="consultations" className="mt-4">
-                  <div className="space-y-3">
-                    {getPatientConsultations(selectedPatientData.id).map((consultation) => (
-                      <Card key={consultation.id}>
-                        <CardContent className="py-4">
-                          <div className="flex items-start justify-between mb-2">
-                            <div>
-                              <p className="font-medium">
-                                {getDoctorName(consultation.doctorId)}
-                              </p>
-                              <p className="text-sm text-muted-foreground">
-                                {new Date(consultation.createdAt).toLocaleDateString('fr-FR')}
-                              </p>
+                  {isLoadingDetails ? (
+                    <div className="text-center py-8">
+                      <p className="text-muted-foreground">Chargement...</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {consultations.map((consultation) => (
+                        <Card key={consultation.id}>
+                          <CardContent className="py-4">
+                            <div className="flex items-start justify-between mb-2">
+                              <div>
+                                <p className="font-medium">
+                                  {consultation.doctor?.name || consultation.doctorName || 'Inconnu'}
+                                </p>
+                                <p className="text-sm text-muted-foreground">
+                                  {new Date(consultation.createdAt).toLocaleDateString('fr-FR')}
+                                </p>
+                              </div>
+                              <StatusBadge status={consultation.status} />
                             </div>
-                            <StatusBadge status={consultation.status} />
-                          </div>
-                          {consultation.diagnosis && (
-                            <p className="text-sm mt-2 p-2 bg-secondary/50 rounded">
-                              <strong>Diagnostic:</strong> {consultation.diagnosis}
-                            </p>
-                          )}
-                        </CardContent>
-                      </Card>
-                    ))}
-                    {getPatientConsultations(selectedPatientData.id).length === 0 && (
-                      <p className="text-center text-muted-foreground py-8">
-                        Aucune consultation
-                      </p>
-                    )}
-                  </div>
+                            {consultation.diagnosis && (
+                              <p className="text-sm mt-2 p-2 bg-secondary/50 rounded">
+                                <strong>Diagnostic:</strong> {consultation.diagnosis}
+                              </p>
+                            )}
+                          </CardContent>
+                        </Card>
+                      ))}
+                      {consultations.length === 0 && (
+                        <p className="text-center text-muted-foreground py-8">
+                          Aucune consultation
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </TabsContent>
 
-                <TabsContent value="lab" className="mt-4">
-                  <div className="space-y-3">
-                    {getPatientLabRequests(selectedPatientData.id).map((request) => (
-                      <Card key={request.id}>
-                        <CardContent className="py-4">
-                          <div className="flex items-start justify-between mb-2">
-                            <div>
-                              <p className="font-medium">
-                                {request.exams.map((e) => e.name).join(', ')}
-                              </p>
-                              <p className="text-sm text-muted-foreground">
-                                {new Date(request.createdAt).toLocaleDateString('fr-FR')}
-                              </p>
+                {!isReception && (
+                  <TabsContent value="lab" className="mt-4">
+                    {isLoadingDetails ? (
+                      <div className="text-center py-8">
+                        <p className="text-muted-foreground">Chargement...</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {labRequests.map((request) => (
+                          <Card key={request.id}>
+                            <CardContent className="py-4">
+                              <div className="flex items-start justify-between mb-2">
+                                <div>
+                                  <p className="font-medium">
+                                    {request.exams?.map((e: any) => e.name || e).join(', ') || request.examNames || 'Examen'}
+                                  </p>
+                                  <p className="text-sm text-muted-foreground">
+                                    {new Date(request.createdAt).toLocaleDateString('fr-FR')}
+                                  </p>
+                                </div>
+                                <StatusBadge status={request.status} />
+                              </div>
+                              {request.results && request.results.length > 0 && (
+                                <div className="mt-3 space-y-2">
+                                  {request.results.map((result: any, i: number) => (
+                                    <div
+                                      key={i}
+                                      className="p-2 bg-success/5 rounded text-sm"
+                                    >
+                                      <p className="font-medium">{result.examName || result.name}</p>
+                                      <p>{result.value || result.result}</p>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </CardContent>
+                          </Card>
+                        ))}
+                        {labRequests.length === 0 && (
+                          <p className="text-center text-muted-foreground py-8">
+                            Aucun examen de laboratoire
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </TabsContent>
+                )}
+
+                <TabsContent value="prescriptions" className="mt-4">
+                  {isLoadingDetails ? (
+                    <div className="text-center py-8">
+                      <p className="text-muted-foreground">Chargement...</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {prescriptions.map((prescription) => (
+                        <Card key={prescription.id}>
+                          <CardContent className="py-4">
+                            <div className="flex items-start justify-between mb-2">
+                              <div>
+                                <p className="font-medium">
+                                  {prescription.doctor?.name || prescription.doctorName || 'Inconnu'}
+                                </p>
+                                <p className="text-sm text-muted-foreground">
+                                  {new Date(prescription.createdAt).toLocaleDateString('fr-FR')}
+                                </p>
+                              </div>
+                              <StatusBadge status={prescription.status} />
                             </div>
-                            <StatusBadge status={request.status} />
-                          </div>
-                          {request.results && request.results.length > 0 && (
-                            <div className="mt-3 space-y-2">
-                              {request.results.map((result, i) => (
-                                <div
-                                  key={i}
-                                  className="p-2 bg-success/5 rounded text-sm"
-                                >
-                                  <p className="font-medium">{result.examName}</p>
-                                  <p>{result.value}</p>
+                            <div className="mt-3 space-y-1">
+                              {prescription.items?.map((item: any, i: number) => (
+                                <div key={i} className="flex items-center gap-2 text-sm">
+                                  <Pill className="h-3 w-3 text-muted-foreground" />
+                                  <span>{item.medicationName || item.medication}</span>
+                                  <span className="text-muted-foreground">
+                                    - {item.dosage}, {item.frequency}
+                                  </span>
                                 </div>
                               ))}
                             </div>
-                          )}
-                        </CardContent>
-                      </Card>
-                    ))}
-                    {getPatientLabRequests(selectedPatientData.id).length === 0 && (
-                      <p className="text-center text-muted-foreground py-8">
-                        Aucun examen de laboratoire
-                      </p>
-                    )}
-                  </div>
-                </TabsContent>
-
-                <TabsContent value="prescriptions" className="mt-4">
-                  <div className="space-y-3">
-                    {getPatientPrescriptions(selectedPatientData.id).map((prescription) => (
-                      <Card key={prescription.id}>
-                        <CardContent className="py-4">
-                          <div className="flex items-start justify-between mb-2">
-                            <div>
-                              <p className="font-medium">
-                                {getDoctorName(prescription.doctorId)}
-                              </p>
-                              <p className="text-sm text-muted-foreground">
-                                {new Date(prescription.createdAt).toLocaleDateString('fr-FR')}
-                              </p>
-                            </div>
-                            <StatusBadge status={prescription.status} />
-                          </div>
-                          <div className="mt-3 space-y-1">
-                            {prescription.items.map((item, i) => (
-                              <div key={i} className="flex items-center gap-2 text-sm">
-                                <Pill className="h-3 w-3 text-muted-foreground" />
-                                <span>{item.medicationName}</span>
-                                <span className="text-muted-foreground">
-                                  - {item.dosage}, {item.frequency}
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                    {getPatientPrescriptions(selectedPatientData.id).length === 0 && (
-                      <p className="text-center text-muted-foreground py-8">
-                        Aucune ordonnance
-                      </p>
-                    )}
-                  </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                      {prescriptions.length === 0 && (
+                        <p className="text-center text-muted-foreground py-8">
+                          Aucune ordonnance
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </TabsContent>
               </Tabs>
             </div>

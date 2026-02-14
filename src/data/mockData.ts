@@ -5,11 +5,15 @@ import type {
   Consultation,
   LabRequest,
   LabExam,
+  ImagingExam,
+  ImagingRequest,
   Prescription,
   PharmacyProduct,
   StockAlert,
   DoctorAssignment,
   TimelineEvent,
+  ConsultationDossier,
+  Bed,
 } from '@/types';
 
 // Mock Users
@@ -134,6 +138,48 @@ export const mockPatients: Patient[] = [
     createdAt: '2026-01-31T08:00:00Z',
     updatedAt: '2026-01-31T08:00:00Z',
   },
+  {
+    id: 'patient-6',
+    vitalisId: 'VTL-2026-00006',
+    firstName: 'Fatou',
+    lastName: 'Cissé',
+    dateOfBirth: '1992-05-18',
+    gender: 'F',
+    phone: '+225 05 11 22 33 44',
+    email: 'fatou.cisse@email.com',
+    address: 'Adjamé, Abidjan',
+    bloodType: 'O+',
+    createdAt: '2026-01-28T10:30:00Z',
+    updatedAt: '2026-01-28T10:30:00Z',
+  },
+  {
+    id: 'patient-7',
+    vitalisId: 'VTL-2026-00007',
+    firstName: 'Ibrahim',
+    lastName: 'Kouamé',
+    dateOfBirth: '1988-12-03',
+    gender: 'M',
+    phone: '+225 07 22 33 44 55',
+    address: 'Abobo, Abidjan',
+    bloodType: 'A-',
+    allergies: ['Iode'],
+    createdAt: '2026-01-28T11:15:00Z',
+    updatedAt: '2026-01-28T11:15:00Z',
+  },
+  {
+    id: 'patient-8',
+    vitalisId: 'VTL-2026-00008',
+    firstName: 'Aminata',
+    lastName: 'Sangaré',
+    dateOfBirth: '1997-08-25',
+    gender: 'F',
+    phone: '+225 05 33 44 55 66',
+    email: 'aminata.sangare@email.com',
+    address: 'Yopougon, Abidjan',
+    bloodType: 'B+',
+    createdAt: '2026-01-28T14:20:00Z',
+    updatedAt: '2026-01-28T14:20:00Z',
+  },
 ];
 
 // Mock Payments
@@ -189,6 +235,80 @@ export const mockPayments: Payment[] = [
     type: 'consultation',
     createdAt: '2026-01-31T08:05:00Z',
     createdBy: 'user-2',
+  },
+  {
+    id: 'pay-6',
+    patientId: 'patient-6',
+    amount: 15000,
+    method: 'orange_money',
+    status: 'paid',
+    type: 'consultation',
+    reference: 'OM-20260128-003',
+    createdAt: '2026-01-28T10:35:00Z',
+    createdBy: 'user-2',
+  },
+  {
+    id: 'pay-7',
+    patientId: 'patient-1',
+    amount: 40000,
+    method: 'cash',
+    status: 'paid',
+    type: 'imaging',
+    createdAt: '2026-01-28T10:35:00Z',
+    createdBy: 'user-2',
+  },
+  {
+    id: 'pay-8',
+    patientId: 'patient-2',
+    amount: 25000,
+    method: 'orange_money',
+    status: 'paid',
+    type: 'imaging',
+    reference: 'OM-20260128-004',
+    createdAt: '2026-01-28T11:05:00Z',
+    createdBy: 'user-2',
+  },
+  {
+    id: 'pay-9',
+    patientId: 'patient-3',
+    amount: 80000,
+    method: 'cash',
+    status: 'paid',
+    type: 'imaging',
+    createdAt: '2026-01-27T14:05:00Z',
+    createdBy: 'user-2',
+  },
+  {
+    id: 'pay-10',
+    patientId: 'patient-1',
+    amount: 65000,
+    method: 'orange_money',
+    status: 'paid',
+    type: 'imaging',
+    reference: 'OM-20260129-001',
+    createdAt: '2026-01-29T09:05:00Z',
+    createdBy: 'user-2',
+  },
+  {
+    id: 'pay-11',
+    patientId: 'patient-3',
+    amount: 32000,
+    method: 'cash',
+    status: 'pending',
+    type: 'pharmacy',
+    createdAt: '2026-01-29T09:00:00Z',
+    createdBy: 'user-6',
+  },
+  {
+    id: 'pay-12',
+    patientId: 'patient-4',
+    amount: 15000,
+    method: 'orange_money',
+    status: 'paid',
+    type: 'pharmacy',
+    reference: 'OM-20260129-006',
+    createdAt: '2026-01-29T10:20:00Z',
+    createdBy: 'user-6',
   },
 ];
 
@@ -265,6 +385,27 @@ export const labExamsCatalog: LabExam[] = [
   { id: 'exam-10', name: 'Cholestérol total', category: 'Biochimie', price: 4000 },
 ];
 
+// Mock Imaging Exams Catalog
+export const imagingExamsCatalog: ImagingExam[] = [
+  { id: 'img-1', name: 'Radiographie thorax (face)', category: 'Radiologie', price: 15000 },
+  { id: 'img-2', name: 'Radiographie thorax (profil)', category: 'Radiologie', price: 15000 },
+  { id: 'img-3', name: 'Radiographie abdomen sans préparation (ASP)', category: 'Radiologie', price: 12000 },
+  { id: 'img-4', name: 'Radiographie bassin', category: 'Radiologie', price: 12000 },
+  { id: 'img-5', name: 'Radiographie crâne', category: 'Radiologie', price: 15000 },
+  { id: 'img-6', name: 'Radiographie membres supérieurs', category: 'Radiologie', price: 10000 },
+  { id: 'img-7', name: 'Radiographie membres inférieurs', category: 'Radiologie', price: 10000 },
+  { id: 'img-8', name: 'Échographie abdominale', category: 'Échographie', price: 25000 },
+  { id: 'img-9', name: 'Échographie pelvienne', category: 'Échographie', price: 25000 },
+  { id: 'img-10', name: 'Échographie obstétricale', category: 'Échographie', price: 30000 },
+  { id: 'img-11', name: 'Échographie cardiaque (échocardiographie)', category: 'Échographie', price: 35000 },
+  { id: 'img-12', name: 'Échographie doppler', category: 'Échographie', price: 30000 },
+  { id: 'img-13', name: 'Scanner cérébral', category: 'Scanner', price: 80000 },
+  { id: 'img-14', name: 'Scanner thorax', category: 'Scanner', price: 70000 },
+  { id: 'img-15', name: 'Scanner abdomen', category: 'Scanner', price: 75000 },
+  { id: 'img-16', name: 'IRM cérébrale', category: 'IRM', price: 120000 },
+  { id: 'img-17', name: 'IRM rachis', category: 'IRM', price: 100000 },
+];
+
 // Mock Lab Requests
 export const mockLabRequests: LabRequest[] = [
   {
@@ -274,7 +415,7 @@ export const mockLabRequests: LabRequest[] = [
     doctorId: 'user-3',
     labTechnicianId: 'user-5',
     exams: [labExamsCatalog[0], labExamsCatalog[1]],
-    status: 'result_ready',
+    status: 'sent_to_doctor',
     totalAmount: 13000,
     paymentId: 'pay-6',
     results: [
@@ -282,19 +423,23 @@ export const mockLabRequests: LabRequest[] = [
         examId: 'exam-1',
         examName: 'TDR Paludisme',
         value: 'Positif',
-        notes: 'Présence de Plasmodium falciparum',
+        unit: '',
+        referenceRange: 'Négatif',
+        notes: 'Présence de Plasmodium falciparum détectée. Test rapide positif confirmé.',
         completedAt: '2026-01-28T14:00:00Z',
       },
       {
         examId: 'exam-2',
-        examName: 'NFS',
-        value: 'Hb: 11.2 g/dL, GB: 8500/mm³, Plaquettes: 180000/mm³',
-        referenceRange: 'Hb: 12-16, GB: 4000-10000, Plaq: 150000-400000',
+        examName: 'Numération Formule Sanguine (NFS)',
+        value: 'Hémoglobine: 11.2 g/dL\nGlobules blancs: 8500/mm³\nPlaquettes: 180000/mm³\nHématocrite: 34%\nVGM: 88 fL',
+        unit: '',
+        referenceRange: 'Hb: 12-16 g/dL\nGB: 4000-10000/mm³\nPlaq: 150000-400000/mm³\nHt: 36-48%\nVGM: 80-100 fL',
+        notes: 'Anémie légère (Hb abaissée). Leucocytose modérée. Thrombopénie légère. VGM normal.',
         completedAt: '2026-01-28T14:30:00Z',
       },
     ],
     createdAt: '2026-01-28T10:00:00Z',
-    updatedAt: '2026-01-28T14:30:00Z',
+    updatedAt: '2026-01-28T15:00:00Z',
   },
   {
     id: 'lab-2',
@@ -302,11 +447,53 @@ export const mockLabRequests: LabRequest[] = [
     consultationId: 'consult-3',
     doctorId: 'user-3',
     exams: [labExamsCatalog[2], labExamsCatalog[4]],
-    status: 'in_progress',
+    status: 'pending',
     totalAmount: 9000,
     paymentId: 'pay-3',
     createdAt: '2026-01-29T11:30:00Z',
     updatedAt: '2026-01-29T12:00:00Z',
+  },
+  {
+    id: 'lab-4',
+    patientId: 'patient-2',
+    consultationId: 'consult-2',
+    doctorId: 'user-4',
+    labTechnicianId: 'user-5',
+    exams: [labExamsCatalog[2], labExamsCatalog[3], labExamsCatalog[5]],
+    status: 'sent_to_doctor',
+    totalAmount: 15000,
+    paymentId: 'pay-2',
+    results: [
+      {
+        examId: 'exam-3',
+        examName: 'Glycémie à jeun',
+        value: '5.8',
+        unit: 'mmol/L',
+        referenceRange: '3.9 - 5.5 mmol/L',
+        notes: 'Glycémie légèrement élevée. Recommandation: contrôle diététique et réévaluation.',
+        completedAt: '2026-01-28T15:00:00Z',
+      },
+      {
+        examId: 'exam-4',
+        examName: 'Créatinine',
+        value: '95',
+        unit: 'μmol/L',
+        referenceRange: '62 - 106 μmol/L (Femme)',
+        notes: 'Valeur dans les limites normales.',
+        completedAt: '2026-01-28T15:15:00Z',
+      },
+      {
+        examId: 'exam-5',
+        examName: 'Transaminases (ALAT/ASAT)',
+        value: 'ALAT: 42 U/L\nASAT: 38 U/L',
+        unit: 'U/L',
+        referenceRange: 'ALAT: 7-35 U/L\nASAT: 10-40 U/L',
+        notes: 'ALAT légèrement élevée. ASAT normale. Évaluation hépatique à surveiller.',
+        completedAt: '2026-01-28T15:30:00Z',
+      },
+    ],
+    createdAt: '2026-01-28T09:00:00Z',
+    updatedAt: '2026-01-28T15:30:00Z',
   },
   {
     id: 'lab-3',
@@ -314,10 +501,63 @@ export const mockLabRequests: LabRequest[] = [
     consultationId: 'consult-2',
     doctorId: 'user-4',
     exams: [labExamsCatalog[9]],
-    status: 'pending_payment',
+    status: 'pending',
     totalAmount: 4000,
     createdAt: '2026-01-28T11:00:00Z',
     updatedAt: '2026-01-28T11:00:00Z',
+  },
+];
+
+// Mock Imaging Requests
+export const mockImagingRequests: ImagingRequest[] = [
+  {
+    id: 'img-1',
+    patientId: 'patient-1',
+    consultationId: 'consult-1',
+    doctorId: 'user-3',
+    exams: [imagingExamsCatalog[0], imagingExamsCatalog[7]],
+    status: 'pending',
+    totalAmount: 40000,
+    paymentId: 'pay-7',
+    createdAt: '2026-01-28T10:30:00Z',
+    updatedAt: '2026-01-28T10:30:00Z',
+  },
+  {
+    id: 'img-2',
+    patientId: 'patient-2',
+    consultationId: 'consult-2',
+    doctorId: 'user-4',
+    exams: [imagingExamsCatalog[8]],
+    status: 'pending',
+    totalAmount: 25000,
+    paymentId: 'pay-8',
+    createdAt: '2026-01-28T11:00:00Z',
+    updatedAt: '2026-01-28T11:00:00Z',
+  },
+  {
+    id: 'img-3',
+    patientId: 'patient-3',
+    consultationId: 'consult-3',
+    doctorId: 'user-3',
+    exams: [imagingExamsCatalog[12]],
+    status: 'sent_to_doctor',
+    totalAmount: 80000,
+    paymentId: 'pay-9',
+    results: 'Scanner cérébral réalisé. Pas de lésion intracrânienne visible. Structures normales.',
+    createdAt: '2026-01-27T14:00:00Z',
+    updatedAt: '2026-01-27T16:00:00Z',
+  },
+  {
+    id: 'img-4',
+    patientId: 'patient-1',
+    consultationId: 'consult-1',
+    doctorId: 'user-3',
+    exams: [imagingExamsCatalog[9], imagingExamsCatalog[10]],
+    status: 'pending',
+    totalAmount: 65000,
+    paymentId: 'pay-10',
+    createdAt: '2026-01-29T09:00:00Z',
+    updatedAt: '2026-01-29T09:00:00Z',
   },
 ];
 
@@ -467,6 +707,115 @@ export const mockDoctorAssignments: DoctorAssignment[] = [
     createdAt: '2026-01-31T08:10:00Z',
     createdBy: 'user-2',
   },
+  {
+    id: 'assign-5',
+    patientId: 'patient-6',
+    doctorId: 'user-4',
+    paymentId: 'pay-6',
+    status: 'completed',
+    createdAt: '2026-01-28T10:40:00Z',
+    createdBy: 'user-2',
+  },
+  {
+    id: 'assign-6',
+    patientId: 'patient-7',
+    doctorId: 'user-3',
+    paymentId: 'pay-7',
+    status: 'in_consultation',
+    createdAt: '2026-01-28T11:25:00Z',
+    createdBy: 'user-2',
+  },
+  {
+    id: 'assign-7',
+    patientId: 'patient-1',
+    doctorId: 'user-3',
+    paymentId: 'pay-8',
+    status: 'completed',
+    createdAt: '2026-02-01T09:00:00Z',
+    createdBy: 'user-2',
+  },
+];
+
+// Mock Consultation Dossiers
+export const mockConsultationDossiers: ConsultationDossier[] = [
+  {
+    id: 'dossier-1',
+    patientId: 'patient-1',
+    doctorId: 'user-3',
+    assignmentId: 'assign-1',
+    status: 'archived',
+    consultationId: 'consult-1',
+    labRequestIds: ['lab-req-1'],
+    prescriptionIds: ['presc-1'],
+    createdAt: '2026-01-28T08:40:00Z',
+    completedAt: '2026-01-28T15:00:00Z',
+    archivedAt: '2026-01-28T15:30:00Z',
+    archivedBy: 'user-3',
+  },
+  {
+    id: 'dossier-2',
+    patientId: 'patient-2',
+    doctorId: 'user-4',
+    assignmentId: 'assign-2',
+    status: 'archived',
+    consultationId: 'consult-2',
+    createdAt: '2026-01-28T09:25:00Z',
+    completedAt: '2026-01-28T10:30:00Z',
+    archivedAt: '2026-01-28T10:35:00Z',
+    archivedBy: 'user-4',
+  },
+  {
+    id: 'dossier-3',
+    patientId: 'patient-3',
+    doctorId: 'user-3',
+    assignmentId: 'assign-3',
+    status: 'active',
+    consultationId: 'consult-3',
+    createdAt: '2026-01-29T10:15:00Z',
+  },
+  {
+    id: 'dossier-4',
+    patientId: 'patient-5',
+    doctorId: 'user-3',
+    assignmentId: 'assign-4',
+    status: 'active',
+    createdAt: '2026-01-31T08:10:00Z',
+  },
+  {
+    id: 'dossier-5',
+    patientId: 'patient-6',
+    doctorId: 'user-4',
+    assignmentId: 'assign-5',
+    status: 'archived',
+    consultationId: 'consult-4',
+    createdAt: '2026-01-28T10:40:00Z',
+    completedAt: '2026-01-28T11:00:00Z',
+    archivedAt: '2026-01-28T11:05:00Z',
+    archivedBy: 'user-4',
+  },
+  {
+    id: 'dossier-6',
+    patientId: 'patient-7',
+    doctorId: 'user-3',
+    assignmentId: 'assign-6',
+    status: 'completed',
+    consultationId: 'consult-4',
+    createdAt: '2026-01-28T11:25:00Z',
+    completedAt: '2026-01-28T12:00:00Z',
+  },
+  // Patient 1 - deuxième visite (nouveau dossier)
+  {
+    id: 'dossier-7',
+    patientId: 'patient-1',
+    doctorId: 'user-3',
+    assignmentId: 'assign-7',
+    status: 'archived',
+    consultationId: 'consult-5',
+    createdAt: '2026-02-01T09:00:00Z',
+    completedAt: '2026-02-01T10:00:00Z',
+    archivedAt: '2026-02-01T10:15:00Z',
+    archivedBy: 'user-3',
+  },
 ];
 
 // Mock Timeline Events
@@ -486,7 +835,7 @@ export const mockTimelineEvents: TimelineEvent[] = [
     patientId: 'patient-1',
     type: 'payment_consultation',
     title: 'Paiement consultation',
-    description: 'Paiement reçu: 15 000 FCFA (Orange Money)',
+    description: 'Paiement reçu: 15 000 GNF (Orange Money)',
     createdAt: '2026-01-28T08:35:00Z',
     createdBy: 'user-2',
   },
@@ -522,7 +871,7 @@ export const mockTimelineEvents: TimelineEvent[] = [
     patientId: 'patient-1',
     type: 'lab_payment',
     title: 'Paiement examens labo',
-    description: 'Paiement reçu: 13 000 FCFA',
+    description: 'Paiement reçu: 13 000 GNF',
     createdAt: '2026-01-28T10:00:00Z',
     createdBy: 'user-2',
   },
@@ -565,18 +914,33 @@ export const getDashboardStats = () => ({
   occupancyRate: 75,
 });
 
-// Get patients assigned to a specific doctor
+// Get patients assigned to a specific doctor (only active dossiers)
 export const getPatientsByDoctor = (doctorId: string) => {
-  const assignments = mockDoctorAssignments.filter(
-    (a) => a.doctorId === doctorId && a.status !== 'completed'
+  // Récupérer uniquement les dossiers actifs pour ce médecin
+  const activeDossiers = mockConsultationDossiers.filter(
+    (d) => d.doctorId === doctorId && d.status === 'active'
   );
-  return assignments.map((a) => {
-    const patient = mockPatients.find((p) => p.id === a.patientId);
-    const consultation = mockConsultations.find(
-      (c) => c.patientId === a.patientId && c.doctorId === doctorId
-    );
-    return { assignment: a, patient, consultation };
+  
+  return activeDossiers.map((dossier) => {
+    const assignment = mockDoctorAssignments.find((a) => a.id === dossier.assignmentId);
+    const patient = mockPatients.find((p) => p.id === dossier.patientId);
+    const consultation = dossier.consultationId
+      ? mockConsultations.find((c) => c.id === dossier.consultationId)
+      : undefined;
+    return { dossier, assignment, patient, consultation };
   });
+};
+
+// Get all dossiers for a patient (history)
+export const getPatientDossiers = (patientId: string): ConsultationDossier[] => {
+  return mockConsultationDossiers
+    .filter((d) => d.patientId === patientId)
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+};
+
+// Get dossier by ID
+export const getDossierById = (dossierId: string): ConsultationDossier | undefined => {
+  return mockConsultationDossiers.find((d) => d.id === dossierId);
 };
 
 // Get timeline for a patient
@@ -584,4 +948,47 @@ export const getPatientTimeline = (patientId: string) => {
   return mockTimelineEvents
     .filter((e) => e.patientId === patientId)
     .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+};
+
+// Mock Beds
+export const mockBeds: Bed[] = [
+  // Classic beds (gratuits)
+  { id: 'bed-1', number: '101', type: 'classic', additionalFee: 0, isOccupied: false },
+  { id: 'bed-2', number: '102', type: 'classic', additionalFee: 0, isOccupied: false },
+  { id: 'bed-3', number: '103', type: 'classic', additionalFee: 0, isOccupied: true, patientId: 'patient-1' },
+  { id: 'bed-4', number: '104', type: 'classic', additionalFee: 0, isOccupied: false },
+  { id: 'bed-5', number: '105', type: 'classic', additionalFee: 0, isOccupied: false },
+  { id: 'bed-6', number: '201', type: 'classic', additionalFee: 0, isOccupied: false },
+  { id: 'bed-7', number: '202', type: 'classic', additionalFee: 0, isOccupied: false },
+  { id: 'bed-8', number: '203', type: 'classic', additionalFee: 0, isOccupied: false },
+  { id: 'bed-9', number: '204', type: 'classic', additionalFee: 0, isOccupied: false },
+  { id: 'bed-10', number: '205', type: 'classic', additionalFee: 0, isOccupied: false },
+  // VIP beds
+  { id: 'bed-11', number: '301', type: 'vip', additionalFee: 15000, isOccupied: false },
+  { id: 'bed-12', number: '302', type: 'vip', additionalFee: 15000, isOccupied: false },
+  { id: 'bed-13', number: '303', type: 'vip', additionalFee: 15000, isOccupied: false },
+  { id: 'bed-14', number: '304', type: 'vip', additionalFee: 15000, isOccupied: false },
+  { id: 'bed-15', number: '305', type: 'vip', additionalFee: 15000, isOccupied: false },
+];
+
+// Get available beds
+export const getAvailableBeds = (type?: 'classic' | 'vip'): Bed[] => {
+  if (type) {
+    return mockBeds.filter((bed) => !bed.isOccupied && bed.type === type);
+  }
+  return mockBeds.filter((bed) => !bed.isOccupied);
+};
+
+// Get bed by ID
+export const getBedById = (bedId: string): Bed | undefined => {
+  return mockBeds.find((bed) => bed.id === bedId);
+};
+
+// Mark bed as occupied
+export const occupyBed = (bedId: string, patientId: string): void => {
+  const bed = mockBeds.find((b) => b.id === bedId);
+  if (bed) {
+    bed.isOccupied = true;
+    bed.patientId = patientId;
+  }
 };

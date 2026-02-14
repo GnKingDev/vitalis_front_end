@@ -11,43 +11,68 @@ export const navigationItems: NavItem[] = [
   
   // Reception
   {
-    title: 'Accueil Patients',
-    href: '/reception',
+    title: 'Liste des patients',
+    href: '/reception/today',
+    icon: 'Users',
+    roles: ['admin', 'reception'],
+  },
+  {
+    title: 'Enregistrer patient',
+    href: '/reception/register',
     icon: 'UserPlus',
     roles: ['admin', 'reception'],
-    children: [
-      { title: 'Patients du jour', href: '/reception/today', icon: 'Calendar', roles: ['admin', 'reception'] },
-      { title: 'Enregistrer patient', href: '/reception/register', icon: 'UserPlus', roles: ['admin', 'reception'] },
-      { title: 'Paiements', href: '/reception/payments', icon: 'CreditCard', roles: ['admin', 'reception'] },
-      { title: 'Assignation médecin', href: '/reception/assign', icon: 'UserCheck', roles: ['admin', 'reception'] },
-    ],
+  },
+  {
+    title: 'Paiement labo et imagerie',
+    href: '/reception/lab-payments',
+    icon: 'FlaskConical',
+    roles: ['admin', 'reception'],
+  },
+  {
+    title: 'Tous les Paiements',
+    href: '/reception/payments',
+    icon: 'CreditCard',
+    roles: ['admin', 'reception'],
+  },
+  {
+    title: 'Assignation médecin',
+    href: '/reception/assign',
+    icon: 'UserCheck',
+    roles: ['reception'],
   },
   
   // Doctor
   {
-    title: 'Consultations',
-    href: '/doctor',
-    icon: 'Stethoscope',
+    title: 'Patients assignés',
+    href: '/doctor/patients',
+    icon: 'Users',
+    roles: ['doctor'],
+  },
+  {
+    title: 'Demandes envoyées au laboratoire et imagerie',
+    href: '/doctor/lab-requests',
+    icon: 'FlaskConical',
+    roles: ['doctor'],
+  },
+  {
+    title: 'Résultats labo et imagerie',
+    href: '/doctor/lab-results',
+    icon: 'TestTube2',
     roles: ['admin', 'doctor'],
-    children: [
-      { title: 'Patients assignés', href: '/doctor/patients', icon: 'Users', roles: ['admin', 'doctor'] },
-      { title: 'Consultation en cours', href: '/doctor/consultation', icon: 'ClipboardList', roles: ['admin', 'doctor'] },
-      { title: 'Demandes labo', href: '/doctor/lab-requests', icon: 'TestTube2', roles: ['admin', 'doctor'] },
-      { title: 'Ordonnances', href: '/doctor/prescriptions', icon: 'Pill', roles: ['admin', 'doctor'] },
-    ],
   },
   
   // Laboratory
   {
-    title: 'Laboratoire',
-    href: '/lab',
+    title: 'Demandes laboratoire',
+    href: '/lab/requests',
     icon: 'FlaskConical',
     roles: ['admin', 'lab'],
-    children: [
-      { title: 'Examens en attente', href: '/lab/pending', icon: 'Clock', roles: ['admin', 'lab'] },
-      { title: 'Examens en cours', href: '/lab/in-progress', icon: 'Activity', roles: ['admin', 'lab'] },
-      { title: 'Résultats', href: '/lab/results', icon: 'FileCheck', roles: ['admin', 'lab'] },
-    ],
+  },
+  {
+    title: 'Demandes imagerie',
+    href: '/lab/imaging-requests',
+    icon: 'Scan',
+    roles: ['admin', 'lab'],
   },
   
   // Pharmacy
@@ -59,8 +84,14 @@ export const navigationItems: NavItem[] = [
     children: [
       { title: 'Stock produits', href: '/pharmacy/stock', icon: 'Package', roles: ['admin', 'pharmacy'] },
       { title: 'Alertes stock', href: '/pharmacy/alerts', icon: 'AlertTriangle', roles: ['admin', 'pharmacy'] },
-      { title: 'Ordonnances reçues', href: '/pharmacy/prescriptions', icon: 'FileText', roles: ['admin', 'pharmacy'] },
+      { title: 'Catégories', href: '/pharmacy/categories', icon: 'Tag', roles: ['admin', 'pharmacy'] },
     ],
+  },
+  {
+    title: 'Paiements Pharmacie',
+    href: '/pharmacy/payments',
+    icon: 'CreditCard',
+    roles: ['admin', 'pharmacy'],
   },
   
   // Admin
@@ -72,7 +103,9 @@ export const navigationItems: NavItem[] = [
     children: [
       { title: 'Utilisateurs', href: '/admin/users', icon: 'Users', roles: ['admin'] },
       { title: 'Statistiques', href: '/admin/stats', icon: 'BarChart3', roles: ['admin'] },
-      { title: 'Paramètres', href: '/admin/settings', icon: 'Settings', roles: ['admin'] },
+      { title: 'Tests Labo et Imagerie', href: '/admin/tests', icon: 'TestTube2', roles: ['admin'] },
+      { title: 'Gestion des lits', href: '/admin/beds', icon: 'Bed', roles: ['admin'] },
+      { title: 'Prix de consultation', href: '/admin/consultation-price', icon: 'DollarSign', roles: ['admin'] },
     ],
   },
   
@@ -81,7 +114,8 @@ export const navigationItems: NavItem[] = [
     title: 'Dossiers patients',
     href: '/patients',
     icon: 'FolderOpen',
-    roles: ['admin', 'doctor', 'lab', 'pharmacy'],
+    roles: ['admin', 'doctor', 'lab'],
+    // Note: reception can access but results are hidden
   },
 ];
 

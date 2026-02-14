@@ -10,6 +10,7 @@ export interface User {
   role: UserRole;
   avatar?: string;
   department?: string;
+  mustChangePassword?: boolean; // Indique si l'utilisateur doit changer son mot de passe
 }
 
 // Patient Types
@@ -33,7 +34,7 @@ export interface Patient {
 // Payment Types
 export type PaymentMethod = 'orange_money' | 'cash';
 export type PaymentStatus = 'pending' | 'paid' | 'cancelled';
-export type PaymentType = 'consultation' | 'lab' | 'pharmacy';
+export type PaymentType = 'consultation' | 'lab' | 'pharmacy' | 'imaging';
 
 export interface Payment {
   id: string;
@@ -71,15 +72,17 @@ export interface Consultation {
 
 // Lab Request Types
 export type LabRequestStatus = 
-  | 'requested' 
-  | 'pending_payment' 
-  | 'paid' 
-  | 'assigned' 
-  | 'in_progress' 
-  | 'result_ready' 
+  | 'pending' 
   | 'sent_to_doctor';
 
 export interface LabExam {
+  id: string;
+  name: string;
+  category: string;
+  price: number;
+}
+
+export interface ImagingExam {
   id: string;
   name: string;
   category: string;
@@ -101,6 +104,25 @@ export interface LabRequest {
   updatedAt: string;
 }
 
+export type ImagingRequestStatus = 
+  | 'pending' 
+  | 'sent_to_doctor';
+
+export interface ImagingRequest {
+  id: string;
+  patientId: string;
+  consultationId: string;
+  doctorId: string;
+  labTechnicianId?: string;
+  exams: ImagingExam[];
+  status: ImagingRequestStatus;
+  totalAmount: number;
+  paymentId?: string;
+  results?: string; // URL ou description des résultats d'imagerie
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface LabResult {
   examId: string;
   examName: string;
@@ -108,6 +130,39 @@ export interface LabResult {
   unit?: string;
   referenceRange?: string;
   notes?: string;
+  completedAt: string;
+}
+
+// Detailed Lab Results Types
+export type ResultAlert = 'low' | 'normal' | 'high';
+
+export interface LabResultParameter {
+  id: string;
+  parameterName: string;
+  value: string;
+  unit: string;
+  referenceRange: string;
+  alert?: ResultAlert;
+  notes?: string;
+}
+
+export interface LabResultSection {
+  id: string;
+  sectionName: string;
+  parameters: LabResultParameter[];
+}
+
+export interface DetailedLabResult {
+  id: string;
+  labRequestId: string;
+  examId: string;
+  examName: string;
+  sections: LabResultSection[];
+  status: 'draft' | 'validated' | 'sent';
+  validatedBy?: string;
+  validatedAt?: string;
+  sentAt?: string;
+  technicianNotes?: string;
   completedAt: string;
 }
 
@@ -160,6 +215,18 @@ export interface StockAlert {
   createdAt: string;
 }
 
+// Bed Types
+export type BedType = 'classic' | 'vip';
+
+export interface Bed {
+  id: string;
+  number: string;
+  type: BedType;
+  additionalFee: number;
+  isOccupied: boolean;
+  patientId?: string;
+}
+
 // Assignment Types
 export interface DoctorAssignment {
   id: string;
@@ -169,6 +236,58 @@ export interface DoctorAssignment {
   status: 'assigned' | 'in_consultation' | 'completed';
   createdAt: string;
   createdBy: string;
+}
+
+// Consultation Dossier Types
+export type DossierStatus = 'active' | 'completed' | 'archived';
+
+export interface CustomItem {
+  id: string;
+  consultationId?: string;
+  patientId: string;
+  doctorId: string;
+  name: string;
+  description?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PrescriptionItem {
+  id?: string;
+  medication: string;
+  dosage: string;
+  frequency: string;
+  duration: string;
+  quantity?: string;
+  instructions?: string;
+}
+
+export interface Prescription {
+  id: string;
+  consultationId: string;
+  patientId: string;
+  doctorId: string;
+  items: PrescriptionItem[];
+  status: 'draft' | 'sent' | 'completed';
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ConsultationDossier {
+  id: string;
+  patientId: string;
+  doctorId: string;
+  assignmentId: string; // Lien avec l'assignation
+  status: DossierStatus;
+  consultationId?: string; // ID de la consultation si créée
+  labRequestIds?: string[]; // IDs des demandes labo liées
+  prescriptionIds?: string[]; // IDs des ordonnances liées
+  prescriptions?: Prescription[]; // Ordonnances complètes (incluant les items)
+  customItems?: CustomItem[]; // Items personnalisés (onglet "Autre")
+  createdAt: string;
+  completedAt?: string; // Date de fin de consultation
+  archivedAt?: string; // Date d'archivage
+  archivedBy?: string; // ID de l'utilisateur qui a archivé
 }
 
 // Patient Journey / Timeline
