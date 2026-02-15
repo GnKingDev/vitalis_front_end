@@ -5,5 +5,8 @@
 # En développement, le backend devrait tourner sur le port 3000
 VITE_API_URL=http://localhost:3000
 
-# En production, utiliser l'URL complète du backend
+# En production :
+# - Si le backend est sur le même domaine que le frontend, ne pas définir VITE_API_URL
+#   (les requêtes utiliseront des URLs relatives /api/v1)
+# - Si le backend est sur un sous-domaine différent, utiliser l'URL complète :
 # VITE_API_URL=https://api.vitalis.com

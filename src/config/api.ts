@@ -17,11 +17,21 @@ const getApiBaseUrl = (): string => {
     return baseUrl;
   }
   
-  // En production, utilise l'URL du backend depuis les variables d'environnement
-  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
-  const baseUrl = `${apiUrl}/api/v1`;
-  console.log('🔧 API Base URL (PROD):', baseUrl);
-  return baseUrl;
+  // En production, utilise des URLs relatives (même domaine que le frontend)
+  // Si VITE_API_URL est défini, l'utiliser, sinon utiliser /api/v1 (même domaine)
+  const apiUrl = import.meta.env.VITE_API_URL;
+  if (apiUrl) {
+    // Si une URL complète est fournie (ex: https://api.example.com)
+    const baseUrl = `${apiUrl}/api/v1`;
+    console.log('🔧 API Base URL (PROD - Custom):', baseUrl);
+    return baseUrl;
+  } else {
+    // Sinon, utiliser des URLs relatives (même domaine que le frontend)
+    // Le backend doit être accessible sur le même domaine que le frontend
+    const baseUrl = '/api/v1';
+    console.log('🔧 API Base URL (PROD - Same domain):', baseUrl);
+    return baseUrl;
+  }
 };
 
 export const API_BASE_URL = getApiBaseUrl();

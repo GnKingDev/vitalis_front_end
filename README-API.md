@@ -34,12 +34,19 @@ Créer un fichier `.env` à la racine du projet (copier depuis `.env.example` si
 VITE_API_URL=http://localhost:3000
 ```
 
-En production, utiliser l'URL complète du backend :
+En production, deux options sont possibles :
+
+1. **Backend sur le même domaine** (recommandé) : Ne pas définir `VITE_API_URL` ou le laisser vide. Les requêtes utiliseront des URLs relatives (`/api/v1`) qui pointent vers le même domaine que le frontend.
+
+2. **Backend sur un sous-domaine différent** : Définir `VITE_API_URL` avec l'URL complète du backend :
 ```env
 VITE_API_URL=https://api.vitalis.com
 ```
 
-**Note** : Si `VITE_API_URL` n'est pas défini, le proxy utilisera `http://localhost:3000` par défaut.
+**Note** : 
+- En développement, le proxy Vite redirige `/api` vers `http://localhost:3000` (ou la valeur de `VITE_API_URL`).
+- En production, si `VITE_API_URL` n'est pas défini, les requêtes utilisent des URLs relatives vers le même domaine.
+- Le proxy Vite n'est actif qu'en développement (`npm run dev`). En production (`npm run build`), les fichiers statiques sont servis et les requêtes API sont faites directement.
 
 ## Utilisation de l'API
 
