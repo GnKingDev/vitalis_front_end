@@ -600,11 +600,11 @@ const LabPaymentsPage: React.FC = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {requests.map((request) => {
+                {requests.map((request, index) => {
                   const patient = getPatient(request);
                   const doctor = getDoctor(request);
-                  // Le bouton s'affiche si le statut est "pending", indépendamment de paymentId
                   const isPending = request.status === 'pending';
+                  const isFirstRow = index === 0;
 
                   return (
                     <TableRow key={request.id}>
@@ -670,15 +670,19 @@ const LabPaymentsPage: React.FC = () => {
                         } />
                       </TableCell>
                       <TableCell>
-                        <div className="flex items-center gap-2 text-sm">
-                          <CalendarIcon className="h-4 w-4 text-muted-foreground" />
-                          <span>
-                            {new Date(request.createdAt).toLocaleDateString('fr-FR', {
-                              day: '2-digit',
-                              month: 'short',
-                            })}
-                          </span>
-                        </div>
+                        {!isFirstRow ? (
+                          <div className="flex items-center gap-2 text-sm">
+                            <CalendarIcon className="h-4 w-4 text-muted-foreground" />
+                            <span>
+                              {new Date(request.createdAt).toLocaleDateString('fr-FR', {
+                                day: '2-digit',
+                                month: 'short',
+                              })}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">

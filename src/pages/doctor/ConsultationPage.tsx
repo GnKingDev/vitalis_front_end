@@ -404,6 +404,8 @@ const ConsultationPage: React.FC = () => {
 
   // Archive dialog state
   const [isArchiveDialogOpen, setIsArchiveDialogOpen] = useState(false);
+  // Complete consultation confirmation dialog
+  const [isCompleteConsultationDialogOpen, setIsCompleteConsultationDialogOpen] = useState(false);
 
   // Format price function (with dots as thousand separators)
   const formatPrice = (price: number | string): string => {
@@ -602,6 +604,15 @@ const ConsultationPage: React.FC = () => {
       return;
     }
     setIsArchiveDialogOpen(true);
+  };
+
+  // Open complete consultation confirmation dialog
+  const handleOpenCompleteConsultationDialog = () => {
+    if (!currentDossier) {
+      toast.error('Aucun dossier actif trouvé');
+      return;
+    }
+    setIsCompleteConsultationDialogOpen(true);
   };
 
   // Archiver le dossier (confirmed)
@@ -1011,7 +1022,7 @@ const ConsultationPage: React.FC = () => {
                   <Save className="h-4 w-4" />
                   Enregistrer
                 </Button>
-                <Button className="gap-2" onClick={handleCompleteConsultation}>
+                <Button className="gap-2" onClick={handleOpenCompleteConsultationDialog}>
                   <CheckCircle2 className="h-4 w-4" />
                   Terminer la consultation
                 </Button>
@@ -1669,6 +1680,29 @@ const ConsultationPage: React.FC = () => {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Complete consultation confirmation */}
+      <AlertDialog open={isCompleteConsultationDialogOpen} onOpenChange={setIsCompleteConsultationDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Terminer la consultation</AlertDialogTitle>
+            <AlertDialogDescription>
+              Êtes-vous sûr de vouloir terminer cette consultation ? Le dossier passera en statut terminé et sera prêt à être archivé.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annuler</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setIsCompleteConsultationDialogOpen(false);
+                handleCompleteConsultation();
+              }}
+            >
+              Terminer
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Archive Dossier Confirmation Dialog */}
       <AlertDialog open={isArchiveDialogOpen} onOpenChange={setIsArchiveDialogOpen}>

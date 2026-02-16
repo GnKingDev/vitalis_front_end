@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { StatsCard } from '@/components/shared/StatsCard';
 import { StatusBadge } from '@/components/shared/StatusBadge';
@@ -31,6 +32,7 @@ import {
   ArrowRight,
   User,
   Printer,
+  Eye,
 } from 'lucide-react';
 import { getLabRequests } from '@/services/api/labService';
 import { toast } from 'sonner';
@@ -38,6 +40,7 @@ import { Link } from 'react-router-dom';
 
 const LabDashboard: React.FC = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [currentPage, setCurrentPage] = useState(1);
   const [pendingRequests, setPendingRequests] = useState<any[]>([]);
   const [completedToday, setCompletedToday] = useState<any[]>([]);
@@ -299,6 +302,15 @@ const LabDashboard: React.FC = () => {
                             </TableCell>
                             <TableCell className="text-right">
                               <div className="flex items-center justify-end gap-2">
+                                <Button 
+                                  size="sm" 
+                                  variant="outline"
+                                  onClick={() => navigate(`/lab/requests/${request.id}`)}
+                                  className="gap-2"
+                                >
+                                  <Eye className="h-4 w-4" />
+                                  Détail
+                                </Button>
                                 <Button size="sm" variant="outline">
                                   <Printer className="h-4 w-4" />
                                 </Button>

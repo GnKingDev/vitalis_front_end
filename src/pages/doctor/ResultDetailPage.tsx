@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { PageHeader } from '@/components/shared/PageHeader';
@@ -58,24 +58,22 @@ const ResultDetailPage: React.FC = () => {
             data: resultData,
           });
           
-          // Load patient
-          if (resultData.patientId) {
+          // Patient: use the one from API response if present, otherwise fetch by id
+          if (resultData.patient) {
+            setPatient(resultData.patient);
+          } else if (resultData.patientId) {
             const patientResponse = await getPatientById(resultData.patientId);
             if (patientResponse.success && patientResponse.data) {
               setPatient(patientResponse.data);
             }
           }
           
-          // Load doctor (from result data or separate call)
+          // Doctor: use the one from API response if present
           if (resultData.doctor) {
-            setDoctor(resultData.doctor);
-          } else if (resultData.doctorId) {
-            // If doctor not included, you might need a separate API call
-            // For now, we'll use the doctor from result if available
             setDoctor(resultData.doctor);
           }
           
-          // Load consultation for lab requests
+          // Load consultation for lab requests (only if needed and id is present)
           if (resultType === 'lab' && resultData.consultationId) {
             const consultResponse = await getConsultationById(resultData.consultationId);
             if (consultResponse.success && consultResponse.data) {
@@ -131,7 +129,17 @@ const ResultDetailPage: React.FC = () => {
   }
 
   const isLab = result.type === 'lab';
-  const labRequest = isLab ? (result.data as LabRequest) : null;
+  const rawLabData = isLab ? (result.data as any) : null;
+  // API may put exams in request.exams or at root
+  const labExams = rawLabData ? (rawLabData.request?.exams ?? rawLabData.exams ?? []) : [];
+  // results can be object (e.g. { id, validatedBy, validatedAt }) or array of parameter results; ensure we always have an array
+  const rawResults = rawLabData?.results;
+  const labResultsArray = Array.isArray(rawResults)
+    ? rawResults
+    : (rawResults && typeof rawResults === 'object' && Array.isArray((rawResults as any).results)
+        ? (rawResults as any).results
+        : []);
+  const labRequest = isLab ? { ...rawLabData, exams: labExams, results: labResultsArray } : null;
   const imagingRequest = !isLab ? (result.data as ImagingRequest) : null;
 
   const handlePrint = () => {
@@ -156,7 +164,7 @@ const ResultDetailPage: React.FC = () => {
         <div className="flex-1">
           <PageHeader
             title={isLab ? 'Résultats de laboratoire' : 'Résultats d\'imagerie'}
-            description={`Détails des résultats - ${result.data.id}`}
+            description={`Détails des résultats - ${(result.data as any).request?.id ?? (result.data as any).id ?? id}`}
           />
         </div>
       </div>
@@ -198,7 +206,7 @@ const ResultDetailPage: React.FC = () => {
               <Label className="text-sm text-muted-foreground">N° Demande</Label>
               <div className="mt-1">
                 <Badge variant="outline" className="font-mono">
-                  {result.data.id}
+                  {(result.data as any).request?.id ?? result.data.id}
                 </Badge>
               </div>
             </div>
@@ -207,13 +215,18 @@ const ResultDetailPage: React.FC = () => {
               <div className="mt-1 flex items-center gap-2">
                 <Calendar className="h-4 w-4 text-muted-foreground" />
                 <p className="font-medium">
-                  {new Date(result.data.updatedAt).toLocaleDateString('fr-FR', {
-                    day: '2-digit',
-                    month: 'long',
-                    year: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })}
+                  {(() => {
+                    const dateVal = (result.data as any).completedAt ?? (result.data as any).updatedAt;
+                    if (!dateVal) return '—';
+                    const d = new Date(dateVal);
+                    return isNaN(d.getTime()) ? '—' : d.toLocaleDateString('fr-FR', {
+                      day: '2-digit',
+                      month: 'long',
+                      year: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    });
+                  })()}
                 </p>
               </div>
             </div>
@@ -221,13 +234,17 @@ const ResultDetailPage: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* Results Content */}
+      {/* Results Content - API: results[] with results.results.sections[].items[] (name, value, unit, reference) */}
       {isLab && labRequest ? (
         <div className="space-y-6">
           {labRequest.exams.map((exam, examIndex) => {
-            // Find results for this exam
-            const examResults = labRequest.results?.filter(r => r.examId === exam.id) || [];
-            
+            const resultsList = Array.isArray(labRequest.results) ? labRequest.results : [];
+            const resultDoc = resultsList[0];
+            const sections = resultDoc?.results?.results?.sections ?? resultDoc?.results?.sections ?? [];
+            const section = sections.find((s: any) => (s.title || '').trim() === (exam.name || '').trim());
+            const items: { name?: string; value?: string; unit?: string; reference?: string }[] = section?.items ?? [];
+            const technicianNotes = resultDoc?.technicianNotes;
+
             return (
               <Card key={exam.id}>
                 <CardHeader>
@@ -238,93 +255,44 @@ const ResultDetailPage: React.FC = () => {
                   <p className="text-sm text-muted-foreground">{exam.category}</p>
                 </CardHeader>
                 <CardContent>
-                  {examResults.length > 0 ? (
+                  {items.length > 0 ? (
                     <div className="space-y-4">
-                      {examResults.map((result, resultIndex) => {
-                        // Parse multi-line values if they exist
-                        const values = result.value.split('\n').filter(v => v.trim());
-                        const referenceRanges = result.referenceRange?.split('\n').filter(r => r.trim()) || [];
-                        const units = result.unit || '';
-                        
-                        return (
-                          <div key={resultIndex} className="space-y-3">
-                            {values.length > 1 ? (
-                              // Multiple parameters (like NFS)
-                              <div className="border rounded-lg overflow-hidden">
-                                <Table>
-                                  <TableHeader>
-                                    <TableRow>
-                                      <TableHead className="w-[250px]">Paramètre</TableHead>
-                                      <TableHead className="w-[150px]">Résultat</TableHead>
-                                      <TableHead className="w-[100px]">Unités</TableHead>
-                                      <TableHead className="w-[150px]">Valeurs de référence</TableHead>
-                                    </TableRow>
-                                  </TableHeader>
-                                  <TableBody>
-                                    {values.map((value, idx) => {
-                                      const paramName = value.split(':')[0]?.trim() || `Paramètre ${idx + 1}`;
-                                      const paramValue = value.split(':')[1]?.trim() || value;
-                                      const refRange = referenceRanges[idx] || result.referenceRange || '-';
-                                      
-                                      return (
-                                        <TableRow key={idx}>
-                                          <TableCell className="font-medium">{paramName}</TableCell>
-                                          <TableCell>
-                                            <span className="font-medium">{paramValue}</span>
-                                          </TableCell>
-                                          <TableCell className="text-sm text-muted-foreground">
-                                            {units || '-'}
-                                          </TableCell>
-                                          <TableCell className="text-sm text-muted-foreground">
-                                            {refRange}
-                                          </TableCell>
-                                        </TableRow>
-                                      );
-                                    })}
-                                  </TableBody>
-                                </Table>
-                              </div>
-                            ) : (
-                              // Single parameter
-                              <div className="border rounded-lg overflow-hidden">
-                                <Table>
-                                  <TableHeader>
-                                    <TableRow>
-                                      <TableHead className="w-[250px]">Paramètre</TableHead>
-                                      <TableHead className="w-[150px]">Résultat</TableHead>
-                                      <TableHead className="w-[100px]">Unités</TableHead>
-                                      <TableHead className="w-[150px]">Valeurs de référence</TableHead>
-                                    </TableRow>
-                                  </TableHeader>
-                                  <TableBody>
-                                    <TableRow>
-                                      <TableCell className="font-medium">{result.examName}</TableCell>
-                                      <TableCell>
-                                        <span className="font-medium">{result.value}</span>
-                                      </TableCell>
-                                      <TableCell className="text-sm text-muted-foreground">
-                                        {result.unit || '-'}
-                                      </TableCell>
-                                      <TableCell className="text-sm text-muted-foreground">
-                                        {result.referenceRange || '-'}
-                                      </TableCell>
-                                    </TableRow>
-                                  </TableBody>
-                                </Table>
-                              </div>
-                            )}
-                            
-                            {result.notes && (
-                              <div className="p-3 rounded-lg bg-secondary/20 border">
-                                <p className="text-sm font-semibold mb-1">Notes</p>
-                                <p className="text-sm text-muted-foreground whitespace-pre-wrap">
-                                  {result.notes}
-                                </p>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
+                      <div className="border rounded-lg overflow-hidden">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead className="w-[250px]">Paramètre</TableHead>
+                              <TableHead className="w-[150px]">Résultat</TableHead>
+                              <TableHead className="w-[100px]">Unités</TableHead>
+                              <TableHead className="w-[150px]">Valeurs de référence</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {items.map((item, idx) => (
+                              <TableRow key={idx}>
+                                <TableCell className="font-medium">{item.name ?? '—'}</TableCell>
+                                <TableCell>
+                                  <span className="font-medium">{item.value ?? '—'}</span>
+                                </TableCell>
+                                <TableCell className="text-sm text-muted-foreground">
+                                  {item.unit ?? '—'}
+                                </TableCell>
+                                <TableCell className="text-sm text-muted-foreground">
+                                  {item.reference ?? '—'}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                      {technicianNotes && (
+                        <div className="p-3 rounded-lg bg-secondary/20 border">
+                          <p className="text-sm font-semibold mb-1">Notes du technicien</p>
+                          <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                            {technicianNotes}
+                          </p>
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <div className="text-center py-8 text-muted-foreground">

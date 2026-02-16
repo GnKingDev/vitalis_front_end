@@ -773,8 +773,9 @@ const PharmacyPaymentsPage: React.FC = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {payments.map((payment) => {
+                  {payments.map((payment, index) => {
                     const MethodIcon = getPaymentMethodIcon(payment.method);
+                    const isFirstRow = index === 0;
 
                     return (
                       <TableRow key={payment.id}>
@@ -798,16 +799,20 @@ const PharmacyPaymentsPage: React.FC = () => {
                           </Badge>
                         </TableCell>
                         <TableCell>
-                          <div className="flex items-center gap-2 text-sm">
-                            <CalendarIcon className="h-4 w-4 text-muted-foreground" />
-                            {new Date(payment.createdAt).toLocaleDateString('fr-FR', {
-                              day: '2-digit',
-                              month: '2-digit',
-                              year: 'numeric',
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            })}
-                          </div>
+                          {!isFirstRow ? (
+                            <div className="flex items-center gap-2 text-sm">
+                              <CalendarIcon className="h-4 w-4 text-muted-foreground" />
+                              {new Date(payment.createdAt).toLocaleDateString('fr-FR', {
+                                day: '2-digit',
+                                month: '2-digit',
+                                year: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              })}
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
                         </TableCell>
                         <TableCell className="font-semibold">
                           {payment.amount.toLocaleString()} GNF

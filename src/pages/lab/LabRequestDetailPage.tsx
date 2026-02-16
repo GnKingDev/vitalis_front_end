@@ -9,6 +9,16 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
 import {
   ArrowLeft,
@@ -35,7 +45,9 @@ const LabRequestDetailPage: React.FC = () => {
   const [labRequest, setLabRequest] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [savedResults, setSavedResults] = useState<LabResultData | null>(null);
+  const [currentFormData, setCurrentFormData] = useState<LabResultData | null>(null);
   const [isSending, setIsSending] = useState(false);
+  const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
 
   // Load lab request from API
   useEffect(() => {
@@ -163,19 +175,27 @@ const LabRequestDetailPage: React.FC = () => {
     }
   };
 
+  const handleSendToDoctorClick = () => {
+    setIsConfirmDialogOpen(true);
+  };
+
   const handleSendToDoctor = async () => {
     if (!labRequest || !id) return;
+    setIsConfirmDialogOpen(false);
 
     // Vérifier qu'on a un résultat sauvegardé
-    let resultId = labRequest.results?.id;
+    // Note: results can be an object (from API) or array (from type definition)
+    const resultsObj = Array.isArray(labRequest.results) ? labRequest.results[0] : labRequest.results;
+    let resultId = (resultsObj as any)?.id;
     
-    // Si pas de résultat ID mais qu'on a des résultats sauvegardés, sauvegarder d'abord
-    if (!resultId && savedResults) {
+    // Si pas de résultat ID mais qu'on a des données de formulaire, sauvegarder d'abord
+    const formDataToSave = savedResults || currentFormData;
+    if (!resultId && formDataToSave) {
       try {
         // Transformer les données au format API
         const sections = labRequest.exams.map((exam: any) => {
           const examName = exam.name || exam.labExam?.name || 'Examen';
-          const parameters = savedResults.examResults[exam.id] || [];
+          const parameters = formDataToSave.examResults[exam.id] || [];
           
           return {
             title: examName,
@@ -194,7 +214,7 @@ const LabRequestDetailPage: React.FC = () => {
         const resultData = {
           labRequestId: labRequest.id,
           results: { sections },
-          technicianNotes: savedResults.labComments || savedResults.interpretation || undefined,
+          technicianNotes: formDataToSave.labComments || formDataToSave.interpretation || undefined,
         };
 
         const saveResponse = await saveLabResult(resultData);
@@ -213,9 +233,9 @@ const LabRequestDetailPage: React.FC = () => {
       }
     }
 
-    if (!resultId) {
+    if (!resultId && !formDataToSave) {
       toast.error('Erreur', {
-        description: 'Veuillez d\'abord sauvegarder les résultats avant de les envoyer au médecin',
+        description: 'Veuillez d\'abord remplir le formulaire avant de les envoyer au médecin',
       });
       return;
     }
@@ -223,32 +243,62 @@ const LabRequestDetailPage: React.FC = () => {
     try {
       setIsSending(true);
 
-      // Vérifier le statut du résultat
+      // Étape 1: Récupérer le résultat actuel pour vérifier son statut
       const resultResponse = await getLabResultById(resultId);
-      const currentResult = resultResponse.data;
-      
-      // Si le résultat est en draft, le valider d'abord
-      if (currentResult?.status === 'draft') {
-        await validateLabResult(resultId);
-        toast.success('Résultats validés', {
-          description: 'Les résultats ont été validés',
-        });
+      if (!resultResponse || !resultResponse.success || !resultResponse.data) {
+        throw new Error(resultResponse?.error || 'Impossible de récupérer les résultats');
       }
 
-      // Envoyer au médecin (peut être fait même si déjà validé)
-      if (currentResult?.status !== 'sent') {
-        await sendLabResult(resultId);
+      let currentResult = resultResponse.data;
+      let currentStatus = currentResult.status;
+
+      console.log('📋 Statut actuel du résultat:', currentStatus);
+
+      // Étape 2: Si le résultat est en draft, le valider d'abord
+      if (currentStatus === 'draft') {
+        console.log('✅ Validation du résultat en cours...');
+        const validateResponse = await validateLabResult(resultId);
+        if (!validateResponse || !validateResponse.success) {
+          throw new Error(validateResponse?.error || validateResponse?.message || 'Impossible de valider les résultats');
+        }
+        
+        toast.success('Résultats validés', {
+          description: validateResponse.message || 'Les résultats ont été validés avec succès',
+        });
+
+        // Récupérer le résultat mis à jour après validation
+        const updatedResultResponse = await getLabResultById(resultId);
+        if (updatedResultResponse && updatedResultResponse.success && updatedResultResponse.data) {
+          currentResult = updatedResultResponse.data;
+          currentStatus = currentResult.status;
+          console.log('✅ Statut après validation:', currentStatus);
+        }
+      }
+
+      // Étape 3: Envoyer au médecin si le statut est validated
+      if (currentStatus === 'validated') {
+        console.log('📤 Envoi au médecin en cours...');
+        const sendResponse = await sendLabResult(resultId);
+        if (!sendResponse || !sendResponse.success) {
+          throw new Error(sendResponse?.error || sendResponse?.message || 'Impossible d\'envoyer les résultats au médecin');
+        }
+
+        toast.success('Succès', {
+          description: sendResponse.message || 'Résultats envoyés au médecin avec succès',
+        });
+      } else if (currentStatus === 'sent') {
+        toast.info('Information', {
+          description: 'Les résultats ont déjà été envoyés au médecin',
+        });
+      } else {
+        throw new Error(`Statut invalide: ${currentStatus}. Les résultats doivent être en statut 'draft' ou 'validated' pour être envoyés.`);
       }
 
       // Recharger la demande pour avoir le statut à jour
-      const response = await getLabRequestById(id);
-      if (response.success && response.data) {
-        setLabRequest(response.data);
+      const reloadResponse = await getLabRequestById(id);
+      if (reloadResponse.success && reloadResponse.data) {
+        setLabRequest(reloadResponse.data);
       }
-
-      toast.success('Succès', {
-        description: 'Résultats envoyés au médecin avec succès',
-      });
     } catch (error: any) {
       console.error('Erreur lors de l\'envoi au médecin:', error);
       toast.error('Erreur', {
@@ -454,6 +504,9 @@ const LabRequestDetailPage: React.FC = () => {
             labRequest={labRequest}
             patient={patient}
             doctor={doctor}
+            onFormDataChange={(data) => {
+              setCurrentFormData(data);
+            }}
             onSave={async (data) => {
               try {
                 // Transformer les données au format API attendu
@@ -526,9 +579,16 @@ const LabRequestDetailPage: React.FC = () => {
         <CardContent className="py-4">
           <div className="flex flex-wrap gap-3">
             <Button
-              onClick={handleSendToDoctor}
+              onClick={handleSendToDoctorClick}
               className="gap-2"
-              disabled={labRequest.status === 'sent_to_doctor' || isSending}
+              disabled={
+                labRequest.status === 'sent_to_doctor' || 
+                (labRequest.results && (Array.isArray(labRequest.results) 
+                  ? (labRequest.results[0] as any)?.status === 'sent'
+                  : (labRequest.results as any)?.status === 'sent')) ||
+                isSending ||
+                (!labRequest.results && !currentFormData && !savedResults)
+              }
             >
               <Send className="h-4 w-4" />
               {isSending ? 'Envoi en cours...' : 'Envoyer au médecin'}
@@ -544,6 +604,26 @@ const LabRequestDetailPage: React.FC = () => {
           </div>
         </CardContent>
       </Card>
+
+      {/* Confirmation Dialog */}
+      <AlertDialog open={isConfirmDialogOpen} onOpenChange={setIsConfirmDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmer l'envoi au médecin</AlertDialogTitle>
+            <AlertDialogDescription>
+              Êtes-vous sûr de vouloir envoyer ces résultats au médecin ? 
+              Cette action validera et enverra définitivement les résultats. 
+              Vous ne pourrez plus les modifier après l'envoi.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annuler</AlertDialogCancel>
+            <AlertDialogAction onClick={handleSendToDoctor}>
+              Confirmer l'envoi
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

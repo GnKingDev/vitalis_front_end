@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -21,6 +21,7 @@ interface LabResultsFormCompleteProps {
   patient: Patient;
   doctor: User | null;
   onSave?: (data: LabResultData) => void;
+  onFormDataChange?: (data: LabResultData | null) => void;
 }
 
 export interface LabResultData {
@@ -56,17 +57,47 @@ const LabResultsFormComplete: React.FC<LabResultsFormCompleteProps> = ({
   patient,
   doctor,
   onSave,
+  onFormDataChange,
 }) => {
-  const [isPreviewMode, setIsPreviewMode] = useState(false);
+  // Check if results are already sent/validated (read-only mode)
+  // Note: results can be an object (from API) or array (from type definition)
+  const resultsObj = Array.isArray(labRequest.results) ? labRequest.results[0] : labRequest.results;
+  const isReadOnly = (resultsObj as any)?.status === 'sent' || (resultsObj as any)?.status === 'validated';
+  const [isPreviewMode, setIsPreviewMode] = useState(isReadOnly);
   
   // Initialize form data with empty results for each requested exam
   const initialExamResults = useMemo(() => {
     const results: { [examId: string]: ParameterRow[] } = {};
-    labRequest.exams.forEach(exam => {
-      results[exam.id] = [];
-    });
+    
+    // If results exist and are sent/validated, load them
+    if (isReadOnly && resultsObj && (resultsObj as any).results?.sections) {
+      (resultsObj as any).results.sections.forEach((section: any) => {
+        // Find the exam by name
+        const exam = labRequest.exams.find((e: any) => 
+          e.name === section.title || e.labExam?.name === section.title
+        );
+        if (exam) {
+          results[exam.id] = section.items.map((item: any, index: number) => ({
+            id: `loaded-${exam.id}-${index}`,
+            parameterName: item.name || '',
+            value: item.value || '',
+            unit: item.unit || '',
+            referenceRange: item.reference || '',
+            alert: item.status === 'normal' ? 'normal' : 
+                   item.status === 'high' ? 'high' : 
+                   item.status === 'low' ? 'low' : undefined,
+          }));
+        }
+      });
+    } else {
+      // Initialize empty results
+      labRequest.exams.forEach(exam => {
+        results[exam.id] = [];
+      });
+    }
+    
     return results;
-  }, [labRequest.exams]);
+  }, [labRequest.exams, labRequest.results, isReadOnly]);
 
   const [formData, setFormData] = useState<LabResultData>({
     labNumber: labRequest.id,
@@ -76,7 +107,7 @@ const LabResultsFormComplete: React.FC<LabResultsFormCompleteProps> = ({
     patientAge: calculateAge(patient.dateOfBirth),
     vitalisId: patient.vitalisId,
     examResults: initialExamResults,
-    labComments: '',
+    labComments: (resultsObj as any)?.technicianNotes || '',
     interpretation: '',
   });
 
@@ -90,6 +121,17 @@ const LabResultsFormComplete: React.FC<LabResultsFormCompleteProps> = ({
     }
     return age;
   }
+
+  // Check if form has data and notify parent
+  useEffect(() => {
+    if (!onFormDataChange) return;
+    
+    const hasData = Object.values(formData.examResults).some(
+      params => params.length > 0 && params.some(p => p.parameterName && p.value)
+    );
+    
+    onFormDataChange(hasData ? formData : null);
+  }, [formData, onFormDataChange]);
 
   const calculateAlert = (value: string, referenceRange: string): ResultAlert | undefined => {
     if (!value || !referenceRange) return undefined;
@@ -248,6 +290,7 @@ const LabResultsFormComplete: React.FC<LabResultsFormCompleteProps> = ({
                           onChange={(e) => updateParameter(examId, param.id, 'value', e.target.value)}
                           placeholder="Saisir valeur"
                           className="w-full"
+                          disabled={isReadOnly}
                         />
                       )}
                     </TableCell>
@@ -261,6 +304,7 @@ const LabResultsFormComplete: React.FC<LabResultsFormCompleteProps> = ({
                           onChange={(e) => updateParameter(examId, param.id, 'unit', e.target.value)}
                           placeholder="Unité"
                           className="w-full"
+                          disabled={isReadOnly}
                         />
                       )}
                     </TableCell>
@@ -274,10 +318,11 @@ const LabResultsFormComplete: React.FC<LabResultsFormCompleteProps> = ({
                           onChange={(e) => updateParameter(examId, param.id, 'referenceRange', e.target.value)}
                           placeholder="Ex: 3.5-5.0"
                           className="w-full"
+                          disabled={isReadOnly}
                         />
                       )}
                     </TableCell>
-                    {!isPreviewMode && (
+                    {!isPreviewMode && !isReadOnly && (
                       <TableCell>
                         <Button
                           variant="ghost"
@@ -310,7 +355,11 @@ const LabResultsFormComplete: React.FC<LabResultsFormCompleteProps> = ({
           </div>
           <div className="flex items-center gap-2">
             <Label>Édition</Label>
-            <Switch checked={!isPreviewMode} onCheckedChange={(checked) => setIsPreviewMode(!checked)} />
+            <Switch 
+              checked={!isPreviewMode} 
+              onCheckedChange={(checked) => setIsPreviewMode(!checked)}
+              disabled={isReadOnly}
+            />
             <Label>Aperçu</Label>
           </div>
         </div>
@@ -367,7 +416,11 @@ const LabResultsFormComplete: React.FC<LabResultsFormCompleteProps> = ({
             </div>
             <div className="flex items-center gap-2">
               <Label>Édition</Label>
-              <Switch checked={!isPreviewMode} onCheckedChange={(checked) => setIsPreviewMode(!checked)} />
+              <Switch 
+              checked={!isPreviewMode} 
+              onCheckedChange={(checked) => setIsPreviewMode(!checked)}
+              disabled={isReadOnly}
+            />
               <Label>Aperçu</Label>
             </div>
           </div>
@@ -390,6 +443,7 @@ const LabResultsFormComplete: React.FC<LabResultsFormCompleteProps> = ({
               value={formData.labNumber}
               onChange={(e) => setFormData(prev => ({ ...prev, labNumber: e.target.value }))}
               className="mt-1"
+              disabled={isReadOnly}
             />
           </div>
           <div>
@@ -399,6 +453,7 @@ const LabResultsFormComplete: React.FC<LabResultsFormCompleteProps> = ({
               value={formData.serviceDate}
               onChange={(e) => setFormData(prev => ({ ...prev, serviceDate: e.target.value }))}
               className="mt-1"
+              disabled={isReadOnly}
             />
           </div>
           <div>
@@ -424,6 +479,7 @@ const LabResultsFormComplete: React.FC<LabResultsFormCompleteProps> = ({
               value={formData.patientName}
               onChange={(e) => setFormData(prev => ({ ...prev, patientName: e.target.value }))}
               className="mt-1"
+              disabled={isReadOnly}
             />
           </div>
           <div>
@@ -433,6 +489,7 @@ const LabResultsFormComplete: React.FC<LabResultsFormCompleteProps> = ({
               value={formData.patientAge}
               onChange={(e) => setFormData(prev => ({ ...prev, patientAge: parseInt(e.target.value) || 0 }))}
               className="mt-1"
+              disabled={isReadOnly}
             />
           </div>
           <div>
@@ -473,6 +530,7 @@ const LabResultsFormComplete: React.FC<LabResultsFormCompleteProps> = ({
               placeholder="Ajouter des commentaires..."
               rows={3}
               className="mt-2"
+              disabled={isReadOnly}
             />
           </div>
           <div>
@@ -483,6 +541,7 @@ const LabResultsFormComplete: React.FC<LabResultsFormCompleteProps> = ({
               placeholder="Ajouter une interprétation ou des notes..."
               rows={3}
               className="mt-2"
+              disabled={isReadOnly}
             />
           </div>
         </CardContent>

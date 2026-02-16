@@ -364,7 +364,7 @@ const LabResultsPage: React.FC = () => {
                               className="gap-2"
                             >
                               <Eye className="h-4 w-4" />
-                              Consulter
+                              Détail
                             </Button>
                             <Button
                               variant="outline"

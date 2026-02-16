@@ -378,13 +378,14 @@ const PaymentsPage: React.FC = () => {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  payments.map((payment) => {
+                  payments.map((payment, index) => {
                     const patient = getPatient(payment);
                     const paymentTime = new Date(payment.createdAt).toLocaleTimeString('fr-FR', {
                       hour: '2-digit',
                       minute: '2-digit',
                     });
                     const paymentDate = new Date(payment.createdAt).toLocaleDateString('fr-FR');
+                    const isFirstRow = index === 0;
 
                     return (
                       <TableRow key={payment.id}>
@@ -472,10 +473,14 @@ const PaymentsPage: React.FC = () => {
                           </Badge>
                         </TableCell>
                         <TableCell>
-                          <div>
-                            <p className="text-sm">{paymentDate}</p>
-                            <p className="text-xs text-muted-foreground">{paymentTime}</p>
-                          </div>
+                          {!isFirstRow ? (
+                            <div>
+                              <p className="text-sm">{paymentDate}</p>
+                              <p className="text-xs text-muted-foreground">{paymentTime}</p>
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
                         </TableCell>
                       </TableRow>
                     );
