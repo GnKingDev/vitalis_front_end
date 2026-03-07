@@ -208,8 +208,7 @@ export interface PharmacyProduct {
   name: string;
   category: string;
   price: number;
-  salePrice?: number | null;
-  privatePrice?: number | null;
+  salePrice: number;
   stock: number;
   minStock: number;
   unit: string;
