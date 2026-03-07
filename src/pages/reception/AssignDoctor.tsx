@@ -53,8 +53,8 @@ import {
   getReceptionPatients,
   getReceptionDoctors,
   createAssignment,
+  updateAssignment,
 } from '@/services/api/receptionService';
-import { api } from '@/config/api';
 import { PatientInsuranceDiscount } from '@/components/shared/PatientInsuranceDiscount';
 
 const AssignDoctor: React.FC = () => {
@@ -240,7 +240,7 @@ const AssignDoctor: React.FC = () => {
     try {
       if (currentAssignment) {
         // Update existing assignment
-        const response = await api.put(`/reception/assignments/${currentAssignment.id}`, {
+        const response = await updateAssignment(currentAssignment.id, {
           doctorId: selectedDoctor,
         });
 

@@ -236,6 +236,16 @@ export const createAssignment = async (assignmentData: {
 };
 
 /**
+ * Modifier une assignation (changer le médecin)
+ */
+export const updateAssignment = async (
+  assignmentId: string,
+  data: { doctorId: string }
+): Promise<any> => {
+  return api.put(`/reception/assignments/${assignmentId}`, data);
+};
+
+/**
  * Liste des médecins disponibles
  */
 export const getReceptionDoctors = async (): Promise<any> => {
