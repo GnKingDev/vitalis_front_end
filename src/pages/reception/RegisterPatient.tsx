@@ -224,27 +224,29 @@ const RegisterPatient: React.FC = () => {
     return availableBeds.filter((bed) => bed.type === bedTypeFilter);
   }, [availableBeds, bedTypeFilter]);
 
-  // Montant de base (consultation + lit)
+  // Montant de base (consultation + lit VIP)
   const baseAmount = useMemo(() => {
-    const bedFee = selectedBed && selectedBed !== 'none' 
-      ? availableBeds.find((b) => b.id === selectedBed)?.additionalFee || 0 
-      : 0;
-    return consultationPrice + bedFee;
+    const bed = selectedBed && selectedBed !== 'none' 
+      ? availableBeds.find((b) => b.id === selectedBed) 
+      : null;
+    const bedFee = bed ? (Number(bed.additionalFee) || 0) : 0;
+    return Number(consultationPrice) + bedFee;
   }, [selectedBed, consultationPrice, availableBeds]);
 
-  // Déduction assurance puis remise (mock — logique à valider côté backend)
+  // Déduction assurance puis remise
   const { insuranceDeduction, discountDeduction, totalAmount } = useMemo(() => {
+    const base = Number(baseAmount) || 0;
     const insDed = insuranceData.isInsured && insuranceData.coveragePercent > 0
-      ? baseAmount * (insuranceData.coveragePercent / 100)
+      ? base * (insuranceData.coveragePercent / 100)
       : 0;
-    const afterInsurance = baseAmount - insDed;
+    const afterInsurance = base - insDed;
     const discDed = discountData.hasDiscount && discountData.discountPercent > 0
       ? afterInsurance * (discountData.discountPercent / 100)
       : 0;
     return {
       insuranceDeduction: insDed,
       discountDeduction: discDed,
-      totalAmount: Math.max(0, afterInsurance - discDed),
+      totalAmount: Math.max(0, Math.round((afterInsurance - discDed) * 100) / 100),
     };
   }, [baseAmount, insuranceData.isInsured, insuranceData.coveragePercent, discountData.hasDiscount, discountData.discountPercent]);
 
@@ -887,7 +889,7 @@ const RegisterPatient: React.FC = () => {
                         {filteredBeds.map((bed) => (
                           <SelectItem key={bed.id} value={bed.id}>
                             Lit {bed.number} - {bed.type === 'vip' ? 'VIP' : 'Classique'}
-                          {bed.additionalFee > 0 && ` (+${bed.additionalFee.toLocaleString()} GNF)`}
+                          {Number(bed.additionalFee) > 0 && ` (+${(Number(bed.additionalFee) || 0).toLocaleString()} GNF)`}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -904,16 +906,15 @@ const RegisterPatient: React.FC = () => {
                             Type: {availableBeds.find((b) => b.id === selectedBed)?.type === 'vip' ? 'VIP' : 'Classique'}
                           </p>
                         </div>
-                        {availableBeds.find((b) => b.id === selectedBed)?.additionalFee && availableBeds.find((b) => b.id === selectedBed)!.additionalFee > 0 && (
-                          <p className="font-semibold text-primary">
-                            +{availableBeds.find((b) => b.id === selectedBed)?.additionalFee.toLocaleString()} GNF
-                          </p>
-                        )}
-                        {availableBeds.find((b) => b.id === selectedBed)?.additionalFee === 0 && (
-                          <p className="font-semibold text-success">
-                            Gratuit
-                          </p>
-                        )}
+                        {(() => {
+                          const bed = availableBeds.find((b) => b.id === selectedBed);
+                          const fee = Number(bed?.additionalFee) || 0;
+                          return fee > 0 ? (
+                            <p className="font-semibold text-primary">+{fee.toLocaleString()} GNF</p>
+                          ) : bed ? (
+                            <p className="font-semibold text-success">Gratuit</p>
+                          ) : null;
+                        })()}
                       </div>
                     </div>
                   )}
@@ -933,7 +934,7 @@ const RegisterPatient: React.FC = () => {
                       <span className="font-medium">
                         {(() => {
                           const bed = availableBeds.find((b) => b.id === selectedBed);
-                          return bed?.additionalFee === 0 ? 'Gratuit' : `+${bed?.additionalFee.toLocaleString()} GNF`;
+                          return bed && Number(bed.additionalFee) === 0 ? 'Gratuit' : `+${(Number(bed?.additionalFee) || 0).toLocaleString()} GNF`;
                         })()}
                       </span>
                     </div>
@@ -1316,7 +1317,7 @@ const RegisterPatient: React.FC = () => {
                       {filteredBeds.map((bed) => (
                         <SelectItem key={bed.id} value={bed.id}>
                           Lit {bed.number} - {bed.type === 'vip' ? 'VIP' : 'Classique'}
-                          {bed.additionalFee > 0 && ` (+${bed.additionalFee.toLocaleString()} GNF)`}
+                          {Number(bed.additionalFee) > 0 && ` (+${(Number(bed.additionalFee) || 0).toLocaleString()} GNF)`}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -1335,14 +1336,13 @@ const RegisterPatient: React.FC = () => {
                       </div>
                       {(() => {
                         const bed = availableBeds.find((b) => b.id === selectedBed);
-                          return bed?.additionalFee === 0 ? (
-                            <p className="font-semibold text-success">Gratuit</p>
-                          ) : (
-                            <p className="font-semibold text-primary">
-                              +{bed?.additionalFee.toLocaleString()} GNF
-                            </p>
-                          );
-                        })()}
+                        const fee = Number(bed?.additionalFee) || 0;
+                        return fee === 0 && bed ? (
+                          <p className="font-semibold text-success">Gratuit</p>
+                        ) : fee > 0 ? (
+                          <p className="font-semibold text-primary">+{fee.toLocaleString()} GNF</p>
+                        ) : null;
+                      })()}
                       </div>
                     </div>
                   )}
@@ -1362,7 +1362,7 @@ const RegisterPatient: React.FC = () => {
                       <span className="font-medium">
                         {(() => {
                           const bed = availableBeds.find((b) => b.id === selectedBed);
-                          return bed?.additionalFee === 0 ? 'Gratuit' : `+${bed?.additionalFee.toLocaleString()} GNF`;
+                          return bed && Number(bed.additionalFee) === 0 ? 'Gratuit' : `+${(Number(bed?.additionalFee) || 0).toLocaleString()} GNF`;
                         })()}
                       </span>
                     </div>
