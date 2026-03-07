@@ -232,11 +232,12 @@ const PharmacyPaymentsPage: React.FC = () => {
           limit: 1,
         });
 
-        if (response.success && response.data?.patients?.length > 0) {
-          const foundPatient = response.data.patients.find(
-            (p: any) => p.vitalisId?.toLowerCase() === patientId.toLowerCase()
+        const list = response.data?.patients ?? (Array.isArray(response.data) ? response.data : []);
+        if (response.success && list.length > 0) {
+          const foundPatient = list.find(
+            (p: any) => p.vitalisId?.toLowerCase() === patientId.trim().toLowerCase()
           );
-          setPatientInfo(foundPatient || response.data.patients[0]);
+          setPatientInfo(foundPatient ?? list[0]);
         } else {
           setPatientInfo(null);
         }

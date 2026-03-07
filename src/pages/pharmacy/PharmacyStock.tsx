@@ -67,6 +67,8 @@ const PharmacyStock: React.FC = () => {
     category: '',
     customCategory: '',
     price: '',
+    salePrice: '',
+    privatePrice: '',
     stock: '',
     minStock: '',
     unit: '',
@@ -223,14 +225,26 @@ const PharmacyStock: React.FC = () => {
     }
 
     try {
-      const response = await createPharmacyProduct({
-        name: newProduct.name,
-        category: newProduct.category,
-        price: price,
-        stock: stock,
-        minStock: minStock,
-        unit: newProduct.unit,
-      });
+      const salePriceVal = newProduct.salePrice ? parseFloat(newProduct.salePrice) : undefined;
+        const privatePriceVal = newProduct.privatePrice ? parseFloat(newProduct.privatePrice) : undefined;
+        if (salePriceVal != null && (isNaN(salePriceVal) || salePriceVal < 0)) {
+          toast.error('Le prix de vente doit être un nombre positif');
+          return;
+        }
+        if (privatePriceVal != null && (isNaN(privatePriceVal) || privatePriceVal < 0)) {
+          toast.error('Le prix privé doit être un nombre positif');
+          return;
+        }
+        const response = await createPharmacyProduct({
+          name: newProduct.name,
+          category: newProduct.category,
+          price: price,
+          salePrice: salePriceVal ?? null,
+          privatePrice: privatePriceVal ?? null,
+          stock: stock,
+          minStock: minStock,
+          unit: newProduct.unit,
+        });
 
       if (response.success) {
         toast.success('Produit ajouté avec succès');
@@ -269,12 +283,12 @@ const PharmacyStock: React.FC = () => {
           category: '',
           customCategory: '',
           price: '',
+          salePrice: '',
+          privatePrice: '',
           stock: '',
           minStock: '',
           unit: '',
         });
-        
-        setIsAddDialogOpen(false);
         
         setIsAddDialogOpen(false);
       }
@@ -377,6 +391,30 @@ const PharmacyStock: React.FC = () => {
                   />
                 </div>
                 <div className="space-y-2">
+                  <Label htmlFor="salePrice">Prix de vente (GNF)</Label>
+                  <Input
+                    id="salePrice"
+                    type="number"
+                    placeholder="Optionnel"
+                    value={newProduct.salePrice}
+                    onChange={(e) => setNewProduct({ ...newProduct, salePrice: e.target.value })}
+                    min="0"
+                    step="100"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="privatePrice">Prix privé (GNF)</Label>
+                  <Input
+                    id="privatePrice"
+                    type="number"
+                    placeholder="Optionnel"
+                    value={newProduct.privatePrice}
+                    onChange={(e) => setNewProduct({ ...newProduct, privatePrice: e.target.value })}
+                    min="0"
+                    step="100"
+                  />
+                </div>
+                <div className="space-y-2">
                   <Label htmlFor="unit">Unité *</Label>
                   <Input
                     id="unit"
@@ -418,6 +456,8 @@ const PharmacyStock: React.FC = () => {
                       category: '',
                       customCategory: '',
                       price: '',
+                      salePrice: '',
+                      privatePrice: '',
                       stock: '',
                       minStock: '',
                       unit: '',
@@ -581,6 +621,12 @@ const PharmacyStock: React.FC = () => {
                     Prix
                   </th>
                   <th className="text-left py-3 px-4 font-medium text-muted-foreground">
+                    Prix vente
+                  </th>
+                  <th className="text-left py-3 px-4 font-medium text-muted-foreground">
+                    Prix privé
+                  </th>
+                  <th className="text-left py-3 px-4 font-medium text-muted-foreground">
                     Stock
                   </th>
                   <th className="text-left py-3 px-4 font-medium text-muted-foreground">
@@ -594,7 +640,7 @@ const PharmacyStock: React.FC = () => {
               <tbody>
                   {products.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="text-center py-12 text-muted-foreground">
+                      <td colSpan={8} className="text-center py-12 text-muted-foreground">
                         {appliedSearch || appliedCategoryFilter !== 'all' ? 'Aucun produit trouvé' : 'Aucun produit enregistré'}
                       </td>
                     </tr>
@@ -624,6 +670,12 @@ const PharmacyStock: React.FC = () => {
                       </td>
                       <td className="py-3 px-4 font-medium">
                         {(product.price || 0).toLocaleString()} GNF
+                      </td>
+                      <td className="py-3 px-4 text-muted-foreground">
+                        {product.salePrice != null ? `${Number(product.salePrice).toLocaleString()} GNF` : '–'}
+                      </td>
+                      <td className="py-3 px-4 text-muted-foreground">
+                        {product.privatePrice != null ? `${Number(product.privatePrice).toLocaleString()} GNF` : '–'}
                       </td>
                       <td className="py-3 px-4">
                         <div className="w-32">
