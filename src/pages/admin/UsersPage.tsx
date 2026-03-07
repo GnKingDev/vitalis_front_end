@@ -59,12 +59,13 @@ import {
   Ban,
   Copy,
   Check,
+  KeyRound,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import type { User, UserRole } from '@/types';
 import { getRoleLabel, getRoleBadgeClass } from '@/config/navigation';
-import { getUsers, createUser, updateUser, suspendUser, deleteUser } from '@/services/api/usersService';
+import { getUsers, createUser, updateUser, suspendUser, deleteUser, resetPassword } from '@/services/api/usersService';
 import { getLabNumbers } from '@/services/api/labNumbersService';
 import type { LabNumber } from '@/services/api/labNumbersService';
 
@@ -81,6 +82,10 @@ const UsersPage: React.FC = () => {
   const [isSuspendDialogOpen, setIsSuspendDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
+  const [isResetPasswordDialogOpen, setIsResetPasswordDialogOpen] = useState(false);
+  const [userToResetPassword, setUserToResetPassword] = useState<User | null>(null);
+  const [isResetPasswordResultOpen, setIsResetPasswordResultOpen] = useState(false);
+  const [resetPasswordResult, setResetPasswordResult] = useState<{ name: string; email: string; password: string } | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [totalPages, setTotalPages] = useState(1);
@@ -523,6 +528,42 @@ const UsersPage: React.FC = () => {
     }
   };
 
+  // Open reset password confirmation dialog
+  const handleOpenResetPasswordDialog = (user: User) => {
+    setUserToResetPassword(user);
+    setIsResetPasswordDialogOpen(true);
+  };
+
+  // Reset password (confirmed)
+  const handleResetPasswordConfirm = async () => {
+    if (!userToResetPassword) return;
+
+    try {
+      const response = await resetPassword(userToResetPassword.id);
+
+      if (response.success && response.data) {
+        setResetPasswordResult({
+          name: response.data.name || userToResetPassword.name,
+          email: response.data.email || userToResetPassword.email,
+          password: response.data.password || '',
+        });
+        setIsResetPasswordDialogOpen(false);
+        setUserToResetPassword(null);
+        setIsResetPasswordResultOpen(true);
+        toast.success('Mot de passe réinitialisé avec succès');
+      } else {
+        toast.error('Erreur', {
+          description: response.message || 'Impossible de réinitialiser le mot de passe',
+        });
+      }
+    } catch (error: any) {
+      console.error('Erreur lors de la réinitialisation du mot de passe:', error);
+      toast.error('Erreur', {
+        description: error?.message || 'Impossible de réinitialiser le mot de passe',
+      });
+    }
+  };
+
   // Get role badge color
   const getRoleBadge = (role: UserRole) => {
     return (
@@ -900,7 +941,17 @@ const UsersPage: React.FC = () => {
                           )}
                         </TableCell>
                         <TableCell className="text-right">
-                          <div className="flex items-center justify-end gap-2">
+                          <div className="flex items-center justify-end gap-2 flex-wrap">
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              className="gap-2"
+                              onClick={() => handleOpenResetPasswordDialog(user)}
+                              title="Réinitialiser le mot de passe"
+                            >
+                              <KeyRound className="h-4 w-4" />
+                              Réinit. mot de passe
+                            </Button>
                             <Button 
                               variant="ghost" 
                               size="sm" 
@@ -1139,6 +1190,85 @@ const UsersPage: React.FC = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Reset Password Confirmation Dialog */}
+      <AlertDialog open={isResetPasswordDialogOpen} onOpenChange={setIsResetPasswordDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Réinitialiser le mot de passe</AlertDialogTitle>
+            <AlertDialogDescription>
+              Êtes-vous sûr de vouloir réinitialiser le mot de passe de <strong>{userToResetPassword?.name}</strong> ({userToResetPassword?.email}) ? 
+              Un nouveau mot de passe sera généré et affiché pour que vous puissiez le communiquer à l'utilisateur.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annuler</AlertDialogCancel>
+            <AlertDialogAction onClick={handleResetPasswordConfirm} className="gap-2">
+              <KeyRound className="h-4 w-4" />
+              Réinitialiser
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Reset Password Result Dialog */}
+      <Dialog open={isResetPasswordResultOpen} onOpenChange={setIsResetPasswordResultOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Nouveau mot de passe généré</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <Alert>
+              <AlertDescription>
+                Le mot de passe a été réinitialisé pour <strong>{resetPasswordResult?.name}</strong> ({resetPasswordResult?.email}).
+                Veuillez le copier et le communiquer à l'utilisateur. Ce mot de passe ne sera plus affiché après la fermeture.
+              </AlertDescription>
+            </Alert>
+            <div className="space-y-2">
+              <Label>Nouveau mot de passe</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  value={resetPasswordResult?.password || ''}
+                  readOnly
+                  className="font-mono text-sm"
+                  id="reset-password-value"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={async () => {
+                    const pwd = resetPasswordResult?.password || '';
+                    try {
+                      await navigator.clipboard.writeText(pwd);
+                      toast.success('Mot de passe copié');
+                    } catch {
+                      const input = document.getElementById('reset-password-value') as HTMLInputElement;
+                      if (input) {
+                        input.select();
+                        document.execCommand('copy');
+                        toast.success('Mot de passe copié');
+                      }
+                    }
+                  }}
+                  className="gap-2"
+                >
+                  <Copy className="h-4 w-4" />
+                  Copier
+                </Button>
+              </div>
+            </div>
+            <div className="flex justify-end pt-4">
+              <Button onClick={() => {
+                setIsResetPasswordResultOpen(false);
+                setResetPasswordResult(null);
+              }}>
+                Fermer
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Delete User Confirmation Dialog */}
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>

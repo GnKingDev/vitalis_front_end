@@ -76,6 +76,19 @@ export const activateUser = async (id: string): Promise<any> => {
 };
 
 /**
+ * Réinitialiser le mot de passe d'un utilisateur (admin uniquement)
+ * Si newPassword n'est pas fourni ou invalide, le backend génère un mot de passe aléatoire
+ */
+export const resetPassword = async (
+  id: string,
+  newPassword?: string
+): Promise<any> => {
+  return api.patch(`/users/${id}/reset-password`, {
+    ...(newPassword && { newPassword }),
+  });
+};
+
+/**
  * Supprimer un utilisateur
  */
 export const deleteUser = async (id: string): Promise<any> => {
