@@ -105,7 +105,7 @@ export const navigationItems: NavItem[] = [
       { title: 'Statistiques', href: '/admin/stats', icon: 'BarChart3', roles: ['admin'] },
       { title: 'Tests Labo et Imagerie', href: '/admin/tests', icon: 'TestTube2', roles: ['admin'] },
       { title: 'Gestion des lits', href: '/admin/beds', icon: 'Bed', roles: ['admin'] },
-      { title: 'Prix de consultation', href: '/admin/consultation-price', icon: 'DollarSign', roles: ['admin'] },
+      { title: 'Types de consultation', href: '/admin/consultation-types', icon: 'DollarSign', roles: ['admin'] },
       { title: 'Sociétés d\'assurance', href: '/admin/insurance-establishments', icon: 'ShieldCheck', roles: ['admin'] },
       { title: 'Numéros Lab', href: '/admin/lab-numbers', icon: 'FlaskConical', roles: ['admin'] },
       { title: 'Paiements pharmacie', href: '/pharmacy/payments', icon: 'CreditCard', roles: ['admin'] },

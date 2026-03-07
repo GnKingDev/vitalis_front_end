@@ -32,6 +32,7 @@ import StatsPage from "./pages/admin/StatsPage";
 import TestsPage from "./pages/admin/TestsPage";
 import BedsPage from "./pages/admin/BedsPage";
 import ConsultationPricePage from "./pages/admin/ConsultationPricePage";
+import ConsultationTypesPage from "./pages/admin/ConsultationTypesPage";
 import InsuranceEstablishmentsPage from "./pages/admin/InsuranceEstablishmentsPage";
 import LabNumbersPage from "./pages/admin/LabNumbersPage";
 import ChangePasswordPage from "./pages/ChangePasswordPage";
@@ -129,6 +130,7 @@ const App = () => (
               <Route path="/admin/tests" element={<TestsPage />} />
               <Route path="/admin/beds" element={<BedsPage />} />
               <Route path="/admin/consultation-price" element={<ConsultationPricePage />} />
+              <Route path="/admin/consultation-types" element={<ConsultationTypesPage />} />
               <Route path="/admin/settings" element={<Dashboard />} />
               
               {/* Patients */}

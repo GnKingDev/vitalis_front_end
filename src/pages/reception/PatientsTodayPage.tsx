@@ -806,6 +806,19 @@ const PatientsTodayPage: React.FC = () => {
                             }
                           </span>
                         </div>
+                        {(payment as any).consultationTypes && (payment as any).consultationTypes.length > 0 && (
+                          <div className="pt-3 border-t">
+                            <p className="text-sm text-muted-foreground mb-2">Types de consultation émis</p>
+                            <ul className="space-y-1">
+                              {(payment as any).consultationTypes.map((ct: { id: string; name: string; price: number }) => (
+                                <li key={ct.id} className="flex items-center justify-between text-sm">
+                                  <span className="font-medium">{ct.name}</span>
+                                  <span className="text-muted-foreground">{(Number(ct.price) || 0).toLocaleString('fr-FR')} GNF</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
                       </div>
                     </div>
                   ) : null;

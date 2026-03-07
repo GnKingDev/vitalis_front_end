@@ -17,6 +17,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -58,6 +59,7 @@ import {
   getReceptionDoctors,
 } from '@/services/api/receptionService';
 import { getConsultationPrice } from '@/services/api/consultationPriceService';
+import { getConsultationTypes, type ConsultationTypeItem } from '@/services/api/consultationTypesService';
 import { getPatients } from '@/services/api/patientsService';
 import { getInsuranceEstablishments } from '@/services/api/insuranceEstablishmentsService';
 import type { InsuranceEstablishment } from '@/services/api/insuranceEstablishmentsService';
@@ -141,6 +143,8 @@ const RegisterPatient: React.FC = () => {
   const [isLoadingBeds, setIsLoadingBeds] = useState(false);
   const [consultationPrice, setConsultationPrice] = useState<number>(0);
   const [isLoadingPrice, setIsLoadingPrice] = useState(false);
+  const [consultationTypes, setConsultationTypes] = useState<ConsultationTypeItem[]>([]);
+  const [selectedConsultationTypeIds, setSelectedConsultationTypeIds] = useState<string[]>([]);
 
   // Assignment data
   const [selectedDoctor, setSelectedDoctor] = useState('');
@@ -162,10 +166,19 @@ const RegisterPatient: React.FC = () => {
           setAvailableBeds(bedsData);
         }
 
-        // Load consultation price
+        // Load consultation price (fallback si pas de types)
         const priceResponse = await getConsultationPrice();
         if (priceResponse.success && priceResponse.data) {
           setConsultationPrice(priceResponse.data.price || 0);
+        }
+
+        // Load consultation types (pour sélection multiple)
+        const typesResponse = await getConsultationTypes({ activeOnly: true });
+        if (typesResponse.success && Array.isArray(typesResponse.data)) {
+          setConsultationTypes(typesResponse.data);
+          if (typesResponse.data.length > 0 && selectedConsultationTypeIds.length === 0) {
+            setSelectedConsultationTypeIds(typesResponse.data.map((t) => t.id));
+          }
         }
 
         // Load insurance establishments (actives only for selector)
@@ -224,14 +237,24 @@ const RegisterPatient: React.FC = () => {
     return availableBeds.filter((bed) => bed.type === bedTypeFilter);
   }, [availableBeds, bedTypeFilter]);
 
-  // Montant de base (consultation + lit VIP)
+  // Montant de base (types de consultation sélectionnés + lit VIP)
+  const consultationAmount = useMemo(() => {
+    if (selectedConsultationTypeIds.length > 0) {
+      return selectedConsultationTypeIds.reduce((sum, id) => {
+        const t = consultationTypes.find((c) => c.id === id);
+        return sum + (t ? Number(t.price) || 0 : 0);
+      }, 0);
+    }
+    return Number(consultationPrice) || 0;
+  }, [selectedConsultationTypeIds, consultationTypes, consultationPrice]);
+
   const baseAmount = useMemo(() => {
     const bed = selectedBed && selectedBed !== 'none' 
       ? availableBeds.find((b) => b.id === selectedBed) 
       : null;
     const bedFee = bed ? (Number(bed.additionalFee) || 0) : 0;
-    return Number(consultationPrice) + bedFee;
-  }, [selectedBed, consultationPrice, availableBeds]);
+    return consultationAmount + bedFee;
+  }, [selectedBed, consultationAmount, availableBeds]);
 
   // Déduction assurance puis remise
   const { insuranceDeduction, discountDeduction, totalAmount } = useMemo(() => {
@@ -250,12 +273,10 @@ const RegisterPatient: React.FC = () => {
     };
   }, [baseAmount, insuranceData.isInsured, insuranceData.coveragePercent, discountData.hasDiscount, discountData.discountPercent]);
 
-  // Update payment amount when bed changes or consultation price loads
+  // Update payment amount when total changes
   useEffect(() => {
-    if (consultationPrice > 0) {
-      setPaymentData((prev) => ({ ...prev, amount: totalAmount }));
-    }
-  }, [totalAmount, consultationPrice]);
+    setPaymentData((prev) => ({ ...prev, amount: totalAmount }));
+  }, [totalAmount]);
 
   const handleChange = (field: string, value: string) => {
     // Auto-format phone number with +224 prefix
@@ -399,6 +420,7 @@ const RegisterPatient: React.FC = () => {
           method: paymentData.method,
           amount: totalAmount,
           type: 'consultation',
+          consultationTypeIds: selectedConsultationTypeIds.length > 0 ? selectedConsultationTypeIds : undefined,
           reference: paymentData.reference || undefined,
           insurance: insuranceData.isInsured
             ? {
@@ -472,6 +494,7 @@ const RegisterPatient: React.FC = () => {
             method: paymentData.method,
             amount: totalAmount,
             reference: paymentData.reference || undefined,
+            consultationTypeIds: selectedConsultationTypeIds.length > 0 ? selectedConsultationTypeIds : undefined,
           },
           bedId: selectedBed && selectedBed !== 'none' ? selectedBed : undefined,
           assignDoctor: false,
@@ -863,6 +886,31 @@ const RegisterPatient: React.FC = () => {
                   )}
                 </div>
 
+                {/* Consultation types */}
+                <div className="space-y-3">
+                  <Label>Consultations demandées</Label>
+                  {consultationTypes.length > 0 ? (
+                    <div className="flex flex-wrap gap-4 p-3 rounded-lg border bg-card">
+                      {consultationTypes.map((t) => (
+                        <label key={t.id} className="flex items-center gap-2 cursor-pointer">
+                          <Checkbox
+                            checked={selectedConsultationTypeIds.includes(t.id)}
+                            onCheckedChange={(checked) => {
+                              setSelectedConsultationTypeIds((prev) =>
+                                checked ? [...prev, t.id] : prev.filter((id) => id !== t.id)
+                              );
+                            }}
+                          />
+                          <span className="text-sm font-medium">{t.name}</span>
+                          <span className="text-sm text-muted-foreground">({(Number(t.price) || 0).toLocaleString()} GNF)</span>
+                        </label>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Aucun type de consultation configuré. L&apos;admin peut en ajouter dans Types de consultation.</p>
+                  )}
+                </div>
+
                 {/* Bed selection */}
                 <div className="space-y-3">
                   <Label>Sélectionner un lit (optionnel)</Label>
@@ -923,8 +971,8 @@ const RegisterPatient: React.FC = () => {
                 {/* Amount breakdown */}
                 <div className="border-t pt-4 space-y-2">
                   <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Consultation</span>
-                    <span className="font-medium">{consultationPrice.toLocaleString()} GNF</span>
+                    <span className="text-muted-foreground">Consultation(s)</span>
+                    <span className="font-medium">{consultationAmount.toLocaleString()} GNF</span>
                   </div>
                   {selectedBed && selectedBed !== 'none' && (
                     <div className="flex items-center justify-between text-sm">
@@ -1291,6 +1339,31 @@ const RegisterPatient: React.FC = () => {
                 )}
               </div>
 
+              {/* Consultation types */}
+              <div className="space-y-3">
+                <Label>Consultations demandées</Label>
+                {consultationTypes.length > 0 ? (
+                  <div className="flex flex-wrap gap-4 p-3 rounded-lg border bg-card">
+                    {consultationTypes.map((t) => (
+                      <label key={t.id} className="flex items-center gap-2 cursor-pointer">
+                        <Checkbox
+                          checked={selectedConsultationTypeIds.includes(t.id)}
+                          onCheckedChange={(checked) => {
+                            setSelectedConsultationTypeIds((prev) =>
+                              checked ? [...prev, t.id] : prev.filter((id) => id !== t.id)
+                            );
+                          }}
+                        />
+                        <span className="text-sm font-medium">{t.name}</span>
+                        <span className="text-sm text-muted-foreground">({(Number(t.price) || 0).toLocaleString()} GNF)</span>
+                      </label>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">Aucun type de consultation configuré. L&apos;admin peut en ajouter dans Types de consultation.</p>
+                )}
+              </div>
+
               {/* Bed selection */}
               <div className="space-y-3">
                 <Label>Sélectionner un lit (optionnel)</Label>
@@ -1343,16 +1416,16 @@ const RegisterPatient: React.FC = () => {
                           <p className="font-semibold text-primary">+{fee.toLocaleString()} GNF</p>
                         ) : null;
                       })()}
-                      </div>
                     </div>
-                  )}
-                </div>
+                  </div>
+                )}
+              </div>
 
                 {/* Amount breakdown */}
                 <div className="border-t pt-4 space-y-2">
                   <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Consultation</span>
-                    <span className="font-medium">{consultationPrice.toLocaleString()} GNF</span>
+                    <span className="text-muted-foreground">Consultation(s)</span>
+                    <span className="font-medium">{consultationAmount.toLocaleString()} GNF</span>
                   </div>
                   {selectedBed && selectedBed !== 'none' && (
                     <div className="flex items-center justify-between text-sm">

@@ -74,6 +74,7 @@ export const registerPatientPayment = async (patientId: string, paymentData: {
   method: 'cash' | 'orange_money';
   amount: number;
   type: 'consultation' | 'lab' | 'imaging' | 'pharmacy';
+  consultationTypeIds?: string[];
   reference?: string;
   relatedId?: string;
   insurance?: RegisterInsuranceInput;
