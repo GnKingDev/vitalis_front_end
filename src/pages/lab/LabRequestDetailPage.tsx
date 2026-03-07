@@ -33,6 +33,7 @@ import {
   Stethoscope,
   CreditCard,
   ListChecks,
+  Loader2,
 } from 'lucide-react';
 import { getLabRequestById, saveLabResult, validateLabResult, sendLabResult, getLabResultById, getLabRequestPDF } from '@/services/api/labService';
 import LabResultsFormComplete from '@/components/lab/LabResultsFormComplete';
@@ -49,6 +50,8 @@ const LabRequestDetailPage: React.FC = () => {
   const [currentFormData, setCurrentFormData] = useState<LabResultData | null>(null);
   const [isSending, setIsSending] = useState(false);
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
+  const [isPrinting, setIsPrinting] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
 
   // Load lab request from API
   useEffect(() => {
@@ -313,6 +316,7 @@ const LabRequestDetailPage: React.FC = () => {
   const handlePrint = async () => {
     if (!id) return;
     try {
+      setIsPrinting(true);
       const blob = await getLabRequestPDF(id);
       const url = window.URL.createObjectURL(blob);
       const printWindow = window.open(url, '_blank');
@@ -323,23 +327,30 @@ const LabRequestDetailPage: React.FC = () => {
           printed = true;
           printWindow.print();
           window.URL.revokeObjectURL(url);
+          setIsPrinting(false);
         };
         printWindow.addEventListener('load', () => setTimeout(doPrint, 500));
-        setTimeout(doPrint, 2000);
+        setTimeout(() => {
+          doPrint();
+          setIsPrinting(false);
+        }, 2000);
       } else {
         window.URL.revokeObjectURL(url);
         toast.error('Veuillez autoriser les pop-ups pour imprimer le PDF');
+        setIsPrinting(false);
       }
     } catch (err: any) {
       toast.error('Erreur', {
         description: err?.message || 'Impossible de générer le PDF',
       });
+      setIsPrinting(false);
     }
   };
 
   const handleDownloadPDF = async () => {
     if (!id) return;
     try {
+      setIsDownloading(true);
       const blob = await getLabRequestPDF(id);
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -355,6 +366,8 @@ const LabRequestDetailPage: React.FC = () => {
       toast.error('Erreur', {
         description: err?.message || 'Impossible de générer le PDF. Les résultats doivent être validés.',
       });
+    } finally {
+      setIsDownloading(false);
     }
   };
 
