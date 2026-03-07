@@ -167,72 +167,14 @@ const LabDashboard: React.FC = () => {
         />
       </div>
 
-      {/* Main content */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Pending exams */}
+      {/* Main content - "Fini et envoyé" en premier, pleine largeur */}
+      <div className="grid grid-cols-1 gap-6">
+        {/* Fini et envoyé au médecin - section principale */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-lg font-semibold flex items-center gap-2">
-              <Clock className="h-5 w-5 text-warning" />
-              Examens en attente
-            </CardTitle>
-            <Button variant="ghost" size="sm" asChild>
-              <Link to="/lab/pending" className="flex items-center gap-1">
-                Voir tout <ArrowRight className="h-4 w-4" />
-              </Link>
-            </Button>
-          </CardHeader>
-          <CardContent>
-            {pendingRequests.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                <Clock className="h-12 w-12 mx-auto mb-3 opacity-30" />
-                <p>Aucun examen en attente</p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {pendingRequests.map((request) => {
-                  const patient = request.patient || {};
-                  const doctor = request.doctor || {};
-                  return (
-                    <div
-                      key={request.id}
-                      className="p-4 rounded-lg bg-secondary/50 hover:bg-secondary transition-colors"
-                    >
-                      <div className="flex items-start justify-between mb-3">
-                        <div>
-                          <p className="font-medium">
-                            {patient.firstName} {patient.lastName}
-                          </p>
-                          <p className="text-sm text-muted-foreground">
-                            {patient.vitalisId} • Prescrit par {doctor.name || 'Non assigné'}
-                          </p>
-                        </div>
-                        <StatusBadge status={request.status} />
-                      </div>
-                      <div className="flex flex-wrap gap-2 mb-3">
-                        {(request.exams || []).map((exam: any, idx: number) => (
-                          <Badge key={exam.id || idx} variant="outline" className="text-xs">
-                            {exam.name || exam}
-                          </Badge>
-                        ))}
-                      </div>
-                      <Button size="sm" className="w-full">
-                        Commencer l'analyse
-                      </Button>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Completed results */}
-        <Card className="lg:col-span-2">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-lg font-semibold flex items-center gap-2">
               <FileCheck className="h-5 w-5 text-success" />
-              Résultats prêts
+              Fini et envoyé au médecin
             </CardTitle>
             <Button variant="ghost" size="sm" asChild>
               <Link to="/lab/results" className="flex items-center gap-1">
@@ -314,11 +256,6 @@ const LabDashboard: React.FC = () => {
                                 <Button size="sm" variant="outline">
                                   <Printer className="h-4 w-4" />
                                 </Button>
-                                {request.status === 'pending' && (
-                                  <Button size="sm">
-                                    Envoyer au médecin
-                                  </Button>
-                                )}
                               </div>
                             </TableCell>
                           </TableRow>
@@ -380,6 +317,68 @@ const LabDashboard: React.FC = () => {
                   </div>
                 )}
               </>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Examens en attente */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-lg font-semibold flex items-center gap-2">
+              <Clock className="h-5 w-5 text-warning" />
+              Examens en attente
+            </CardTitle>
+            <Button variant="ghost" size="sm" asChild>
+              <Link to="/lab/pending" className="flex items-center gap-1">
+                Voir tout <ArrowRight className="h-4 w-4" />
+              </Link>
+            </Button>
+          </CardHeader>
+          <CardContent>
+            {pendingRequests.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <Clock className="h-12 w-12 mx-auto mb-3 opacity-30" />
+                <p>Aucun examen en attente</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {pendingRequests.map((request) => {
+                  const patient = request.patient || {};
+                  const doctor = request.doctor || {};
+                  return (
+                    <div
+                      key={request.id}
+                      className="p-4 rounded-lg bg-secondary/50 hover:bg-secondary transition-colors"
+                    >
+                      <div className="flex items-start justify-between mb-3">
+                        <div>
+                          <p className="font-medium">
+                            {patient.firstName} {patient.lastName}
+                          </p>
+                          <p className="text-sm text-muted-foreground">
+                            {patient.vitalisId} • Prescrit par {doctor.name || 'Non assigné'}
+                          </p>
+                        </div>
+                        <StatusBadge status={request.status} />
+                      </div>
+                      <div className="flex flex-wrap gap-2 mb-3">
+                        {(request.exams || []).map((exam: any, idx: number) => (
+                          <Badge key={exam.id || idx} variant="outline" className="text-xs">
+                            {exam.name || exam}
+                          </Badge>
+                        ))}
+                      </div>
+                      <Button 
+                        size="sm" 
+                        className="w-full"
+                        onClick={() => navigate(`/lab/requests/${request.id}`)}
+                      >
+                        Commencer l'analyse
+                      </Button>
+                    </div>
+                  );
+                })}
+              </div>
             )}
           </CardContent>
         </Card>

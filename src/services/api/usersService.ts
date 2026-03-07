@@ -43,6 +43,7 @@ export const createUser = async (userData: {
   password?: string; // Optionnel, le backend génère un mot de passe si non fourni
   role: 'admin' | 'reception' | 'doctor' | 'lab' | 'pharmacy';
   department?: string;
+  labNumberId?: string | null; // Pour rôle lab: numéro de laboratoire à assigner
 }): Promise<any> => {
   return api.post('/users', userData);
 };
@@ -55,6 +56,7 @@ export const updateUser = async (id: string, userData: Partial<{
   email: string;
   role: string;
   department: string;
+  labNumberId?: string | null; // Pour rôle lab: numéro de laboratoire à assigner
 }>): Promise<any> => {
   return api.put(`/users/${id}`, userData);
 };

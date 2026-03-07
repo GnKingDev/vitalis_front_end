@@ -28,12 +28,13 @@ import {
   Eye,
   Send,
   Printer,
+  FileDown,
   Calendar,
   Stethoscope,
   CreditCard,
   ListChecks,
 } from 'lucide-react';
-import { getLabRequestById, saveLabResult, validateLabResult, sendLabResult, getLabResultById } from '@/services/api/labService';
+import { getLabRequestById, saveLabResult, validateLabResult, sendLabResult, getLabResultById, getLabRequestPDF } from '@/services/api/labService';
 import LabResultsFormComplete from '@/components/lab/LabResultsFormComplete';
 import type { LabResultData } from '@/components/lab/LabResultsFormComplete';
 
@@ -309,9 +310,55 @@ const LabRequestDetailPage: React.FC = () => {
     }
   };
 
-  const handlePrint = () => {
-    window.print();
+  const handlePrint = async () => {
+    if (!id) return;
+    try {
+      const blob = await getLabRequestPDF(id);
+      const url = window.URL.createObjectURL(blob);
+      const printWindow = window.open(url, '_blank');
+      if (printWindow) {
+        let printed = false;
+        const doPrint = () => {
+          if (printed) return;
+          printed = true;
+          printWindow.print();
+          window.URL.revokeObjectURL(url);
+        };
+        printWindow.addEventListener('load', () => setTimeout(doPrint, 500));
+        setTimeout(doPrint, 2000);
+      } else {
+        window.URL.revokeObjectURL(url);
+        toast.error('Veuillez autoriser les pop-ups pour imprimer le PDF');
+      }
+    } catch (err: any) {
+      toast.error('Erreur', {
+        description: err?.message || 'Impossible de générer le PDF',
+      });
+    }
   };
+
+  const handleDownloadPDF = async () => {
+    if (!id) return;
+    try {
+      const blob = await getLabRequestPDF(id);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const patientName = patient ? `${patient.firstName}-${patient.lastName}` : 'patient';
+      a.download = `resultat-lab-${patientName}-${id}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      a.remove();
+      toast.success('PDF téléchargé');
+    } catch (err: any) {
+      toast.error('Erreur', {
+        description: err?.message || 'Impossible de générer le PDF. Les résultats doivent être validés.',
+      });
+    }
+  };
+
+  const canDownloadPDF = labRequest?.status === 'sent_to_doctor' || savedResults != null;
 
   return (
     <div className="space-y-6">
@@ -332,6 +379,30 @@ const LabRequestDetailPage: React.FC = () => {
             description="Détail de la demande de laboratoire"
           />
         </div>
+        {canDownloadPDF && (
+          <>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleDownloadPDF}
+              disabled={isDownloading}
+              className="gap-2"
+            >
+              {isDownloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />}
+              {isDownloading ? 'Téléchargement...' : 'Télécharger PDF'}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handlePrint}
+              disabled={isPrinting}
+              className="gap-2"
+            >
+              {isPrinting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4" />}
+              {isPrinting ? 'Préparation...' : 'Imprimer'}
+            </Button>
+          </>
+        )}
       </div>
 
       {/* Patient Identification Card */}
@@ -596,10 +667,11 @@ const LabRequestDetailPage: React.FC = () => {
             <Button
               variant="outline"
               onClick={handlePrint}
+              disabled={isPrinting}
               className="gap-2"
             >
-              <Printer className="h-4 w-4" />
-              Imprimer résultat
+              {isPrinting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4" />}
+              {isPrinting ? 'Préparation...' : 'Imprimer résultat'}
             </Button>
           </div>
         </CardContent>

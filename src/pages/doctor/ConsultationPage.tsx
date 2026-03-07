@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { StatusBadge } from '@/components/shared/StatusBadge';
@@ -51,6 +51,9 @@ import {
   X,
   MoreHorizontal,
   Clock,
+  Eye,
+  Loader2,
+  Trash2,
 } from 'lucide-react';
 import type { ConsultationDossier } from '@/types';
 import { getPatientById } from '@/services/api/patientsService';
@@ -60,7 +63,7 @@ import { getLabExams } from '@/services/api/testsService';
 import { getImagingExams } from '@/services/api/testsService';
 import { createLabRequest, getLabRequests } from '@/services/api/labService';
 import { createImagingRequest, getImagingRequests } from '@/services/api/imagingService';
-import { createDoctorPrescription, createDoctorCustomItem } from '@/services/api/doctorService';
+import { createDoctorPrescription, createDoctorCustomItem, getDoctorCustomItems, getCustomItemPDF, deleteDoctorCustomItem, getPrescriptionPDF, deletePrescriptionItem } from '@/services/api/doctorService';
 import { useAuth } from '@/contexts/AuthContext';
 
 const ConsultationPage: React.FC = () => {
@@ -81,6 +84,14 @@ const ConsultationPage: React.FC = () => {
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [isLabHistoryDialogOpen, setIsLabHistoryDialogOpen] = useState(false);
   const [isImagingHistoryDialogOpen, setIsImagingHistoryDialogOpen] = useState(false);
+  const [confirmLabRequestOpen, setConfirmLabRequestOpen] = useState(false);
+  const [confirmImagingRequestOpen, setConfirmImagingRequestOpen] = useState(false);
+  const [savedCustomItems, setSavedCustomItems] = useState<any[]>([]);
+  const [isLoadingCustomItems, setIsLoadingCustomItems] = useState(false);
+  const [isPrintingCustomItem, setIsPrintingCustomItem] = useState<string | null>(null);
+  const [confirmSaveOtherOpen, setConfirmSaveOtherOpen] = useState(false);
+  const [customItemToDelete, setCustomItemToDelete] = useState<{ id: string; name: string } | null>(null);
+  const [isDeletingCustomItem, setIsDeletingCustomItem] = useState(false);
 
   // Load patient
   useEffect(() => {
@@ -287,7 +298,36 @@ const ConsultationPage: React.FC = () => {
     loadHistory();
   }, [selectedPatient?.id]);
 
+  // Load custom items (résultats externes) for this patient/consultation
+  const loadCustomItems = useCallback(async () => {
+    if (!selectedPatient?.id || !user?.id) return;
+    try {
+      setIsLoadingCustomItems(true);
+      const res = await getDoctorCustomItems({
+        patientId: selectedPatient.id,
+        consultationId: consultation?.id,
+        limit: 100,
+      });
+      if (res.success && res.data?.items) {
+        setSavedCustomItems(res.data.items);
+      } else {
+        setSavedCustomItems([]);
+      }
+    } catch (err) {
+      console.error('Erreur chargement custom items:', err);
+      setSavedCustomItems([]);
+    } finally {
+      setIsLoadingCustomItems(false);
+    }
+  }, [selectedPatient?.id, user?.id, consultation?.id]);
+
+  useEffect(() => {
+    loadCustomItems();
+  }, [loadCustomItems]);
+
   const [activeTab, setActiveTab] = useState('consultation');
+
+  const isArchivedDossier = currentDossier?.status === 'archived';
 
   // Consultation form
   const [consultForm, setConsultForm] = useState({
@@ -406,6 +446,10 @@ const ConsultationPage: React.FC = () => {
   const [isArchiveDialogOpen, setIsArchiveDialogOpen] = useState(false);
   // Complete consultation confirmation dialog
   const [isCompleteConsultationDialogOpen, setIsCompleteConsultationDialogOpen] = useState(false);
+  const [isPrintingPrescription, setIsPrintingPrescription] = useState(false);
+  const [isSavePrescriptionDialogOpen, setIsSavePrescriptionDialogOpen] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState<{ id: string; medication: string } | null>(null);
+  const [isDeletingItem, setIsDeletingItem] = useState(false);
 
   // Format price function (with dots as thousand separators)
   const formatPrice = (price: number | string): string => {
@@ -761,19 +805,21 @@ const ConsultationPage: React.FC = () => {
   };
 
   const handleSavePrescription = async () => {
-    if (!selectedPatient || !consultation || !user) {
-      toast.error('Données manquantes');
+    if (!selectedPatient || !user) {
+      toast.error('Données manquantes', {
+        description: 'Patient ou utilisateur introuvable',
+      });
       return;
     }
     
     // Séparer les items existants (avec id) et les nouveaux (sans id)
     const existingItems = prescriptionItems.filter((item) => item.id);
     const newItems = prescriptionItems.filter(
-      (item) => !item.id && item.medication && item.dosage && item.frequency && item.duration
+      (item) => !item.id && item.medication?.trim() && item.dosage?.trim() && item.frequency?.trim() && item.duration?.trim() && (item.quantity !== undefined && item.quantity !== null && String(item.quantity).trim() !== '')
     );
-    
+
     if (newItems.length === 0 && existingItems.length === 0) {
-      toast.error('Veuillez remplir au moins un médicament');
+      toast.error('Veuillez remplir au moins un médicament avec tous les champs (médicament, dosage, fréquence, durée, quantité)');
       return;
     }
     
@@ -781,15 +827,15 @@ const ConsultationPage: React.FC = () => {
       // Si on a de nouveaux items, les créer
       if (newItems.length > 0) {
         const response = await createDoctorPrescription({
-          consultationId: consultation.id,
+          consultationId: consultation?.id || undefined,
           patientId: selectedPatient.id,
           items: newItems.map((item) => ({
-            medication: item.medication,
-            dosage: item.dosage,
-            frequency: item.frequency,
-            duration: item.duration,
-            quantity: item.quantity || '',
-            instructions: item.instructions || undefined,
+            medication: (item.medication || '').trim(),
+            dosage: (item.dosage || '').trim(),
+            frequency: (item.frequency || '').trim(),
+            duration: (item.duration || '').trim(),
+            quantity: String(item.quantity ?? '').trim() || '1',
+            instructions: item.instructions?.trim() || undefined,
           })),
         });
         
@@ -823,6 +869,98 @@ const ConsultationPage: React.FC = () => {
     }
   };
 
+  const handleDeletePrescriptionItem = async () => {
+    if (!itemToDelete) return;
+    setIsDeletingItem(true);
+    try {
+      const response = await deletePrescriptionItem(itemToDelete.id);
+      if (response.success) {
+        toast.success('Médicament supprimé');
+        setPrescriptionItems((prev) => prev.filter((i) => i.id !== itemToDelete.id));
+        if (currentDossier?.id) {
+          const dossierResponse = await getDoctorDossierById(currentDossier.id);
+          if (dossierResponse.success && dossierResponse.data) {
+            setCurrentDossier(dossierResponse.data);
+          }
+        }
+      } else {
+        toast.error('Erreur', { description: response.message || 'Impossible de supprimer' });
+      }
+    } catch (err: any) {
+      toast.error('Erreur', { description: err?.message || 'Impossible de supprimer' });
+    } finally {
+      setIsDeletingItem(false);
+      setItemToDelete(null);
+    }
+  };
+
+  const handlePrintPrescription = async () => {
+    const prescriptionId = currentDossier?.prescriptions?.length
+      ? currentDossier.prescriptions[currentDossier.prescriptions.length - 1]?.id
+      : currentDossier?.prescriptionIds?.[currentDossier.prescriptionIds?.length - 1];
+
+    if (!prescriptionId) {
+      toast.error('Enregistrez l\'ordonnance avant de l\'imprimer');
+      return;
+    }
+
+    setIsPrintingPrescription(true);
+    try {
+      const blob = await getPrescriptionPDF(prescriptionId);
+      const url = window.URL.createObjectURL(blob);
+      const printWindow = window.open(url, '_blank');
+      if (printWindow) {
+        let printed = false;
+        const doPrint = () => {
+          if (printed) return;
+          printed = true;
+          printWindow.print();
+          window.URL.revokeObjectURL(url);
+        };
+        printWindow.addEventListener('load', () => setTimeout(doPrint, 500));
+        setTimeout(doPrint, 2000);
+      } else {
+        window.URL.revokeObjectURL(url);
+        toast.error('Veuillez autoriser les pop-ups pour imprimer');
+      }
+    } catch (err: any) {
+      toast.error('Erreur', {
+        description: err?.message || 'Impossible de générer le PDF',
+      });
+    } finally {
+      setIsPrintingPrescription(false);
+    }
+  };
+
+  const handlePrintCustomItem = async (itemId: string) => {
+    try {
+      setIsPrintingCustomItem(itemId);
+      const blob = await getCustomItemPDF(itemId);
+      const url = window.URL.createObjectURL(blob);
+      const printWindow = window.open(url, '_blank');
+      if (printWindow) {
+        let printed = false;
+        const doPrint = () => {
+          if (printed) return;
+          printed = true;
+          printWindow.print();
+          window.URL.revokeObjectURL(url);
+        };
+        printWindow.addEventListener('load', () => setTimeout(doPrint, 500));
+        setTimeout(doPrint, 2000);
+      } else {
+        window.URL.revokeObjectURL(url);
+        toast.error('Veuillez autoriser les pop-ups pour imprimer');
+      }
+    } catch (err: any) {
+      toast.error('Erreur', {
+        description: err?.message || 'Impossible de générer le PDF',
+      });
+    } finally {
+      setIsPrintingCustomItem(null);
+    }
+  };
+
   const handleSaveOther = async () => {
     if (!selectedPatient || !user) {
       toast.error('Données manquantes');
@@ -849,14 +987,32 @@ const ConsultationPage: React.FC = () => {
       );
       
       await Promise.all(promises);
-      toast.success('Items enregistrés');
-      // Reset form
+      toast.success('Demandes externes enregistrées');
+      // Reset form and reload saved items
       setOtherItems([{ name: '', description: '' }]);
+      loadCustomItems();
     } catch (error: any) {
       console.error('Erreur lors de l\'enregistrement:', error);
       toast.error('Erreur', {
         description: error?.message || 'Impossible d\'enregistrer les items',
       });
+    }
+  };
+
+  const handleDeleteCustomItem = async () => {
+    if (!customItemToDelete) return;
+    try {
+      setIsDeletingCustomItem(true);
+      await deleteDoctorCustomItem(customItemToDelete.id);
+      toast.success('Demande externe supprimée');
+      setCustomItemToDelete(null);
+      loadCustomItems();
+    } catch (error: any) {
+      toast.error('Erreur', {
+        description: error?.message || 'Impossible de supprimer',
+      });
+    } finally {
+      setIsDeletingCustomItem(false);
     }
   };
 
@@ -874,8 +1030,8 @@ const ConsultationPage: React.FC = () => {
         </Button>
         <div className="flex-1">
           <PageHeader
-            title="Consultation"
-            description="Fiche de consultation patient"
+            title={isArchivedDossier ? 'Détail du dossier archivé' : 'Consultation'}
+            description={isArchivedDossier ? 'Consultation en lecture seule (dossier clôturé)' : 'Fiche de consultation patient'}
           />
         </div>
       </div>
@@ -944,12 +1100,14 @@ const ConsultationPage: React.FC = () => {
                   </div>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                <Button variant="secondary" size="sm" className="gap-2" onClick={handleOpenArchiveDialog}>
-                  <Archive className="h-4 w-4" />
-                  Archiver le dossier
-                </Button>
-              </div>
+              {!isArchivedDossier && (
+                <div className="flex items-center gap-2">
+                  <Button variant="secondary" size="sm" className="gap-2" onClick={handleOpenArchiveDialog}>
+                    <Archive className="h-4 w-4" />
+                    Archiver le dossier
+                  </Button>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -971,8 +1129,8 @@ const ConsultationPage: React.FC = () => {
             <span className="hidden sm:inline">Imagerie</span>
           </TabsTrigger>
           <TabsTrigger value="other" className="gap-2">
-            <MoreHorizontal className="h-4 w-4" />
-            <span className="hidden sm:inline">Autre</span>
+            <FileText className="h-4 w-4" />
+            <span className="hidden sm:inline">Demande externe</span>
           </TabsTrigger>
           <TabsTrigger value="prescription" className="gap-2">
             <Pill className="h-4 w-4" />
@@ -997,6 +1155,8 @@ const ConsultationPage: React.FC = () => {
                   rows={3}
                   value={consultForm.symptoms}
                   onChange={(e) => setConsultForm({ ...consultForm, symptoms: e.target.value })}
+                  readOnly={isArchivedDossier}
+                  className={isArchivedDossier ? 'bg-muted' : ''}
                 />
               </div>
               <div className="space-y-2">
@@ -1006,6 +1166,8 @@ const ConsultationPage: React.FC = () => {
                   rows={3}
                   value={consultForm.diagnosis}
                   onChange={(e) => setConsultForm({ ...consultForm, diagnosis: e.target.value })}
+                  readOnly={isArchivedDossier}
+                  className={isArchivedDossier ? 'bg-muted' : ''}
                 />
               </div>
               <div className="space-y-2">
@@ -1015,25 +1177,28 @@ const ConsultationPage: React.FC = () => {
                   rows={3}
                   value={consultForm.notes}
                   onChange={(e) => setConsultForm({ ...consultForm, notes: e.target.value })}
+                  readOnly={isArchivedDossier}
+                  className={isArchivedDossier ? 'bg-muted' : ''}
                 />
               </div>
-              <div className="flex flex-col sm:flex-row gap-3">
-                <Button variant="outline" className="gap-2" onClick={handleSaveConsultation}>
-                  <Save className="h-4 w-4" />
-                  Enregistrer
-                </Button>
-                <Button className="gap-2" onClick={handleOpenCompleteConsultationDialog}>
-                  <CheckCircle2 className="h-4 w-4" />
-                  Terminer la consultation
-                </Button>
-              </div>
+              {!isArchivedDossier && (
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <Button variant="outline" className="gap-2" onClick={handleSaveConsultation}>
+                    <Save className="h-4 w-4" />
+                    Enregistrer
+                  </Button>
+                  <Button className="gap-2" onClick={handleOpenCompleteConsultationDialog}>
+                    <CheckCircle2 className="h-4 w-4" />
+                    Terminer la consultation
+                  </Button>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
 
         {/* Lab Tab */}
         <TabsContent value="lab" className="mt-6 space-y-6">
-          {/* New request form */}
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
@@ -1127,14 +1292,26 @@ const ConsultationPage: React.FC = () => {
                                     </p>
                                   )}
                                 </div>
-                                <div className="text-right">
+                                <div className="text-right flex flex-col items-end gap-2">
                                   <p className="text-lg font-bold text-primary">
                                     {formatPrice(request.totalAmount || 0)}
                                   </p>
                                   {request.resultId && (
-                                    <Badge variant="outline" className="mt-2 text-xs">
-                                      Résultat disponible
-                                    </Badge>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="gap-1 text-xs"
+                                      onClick={() => {
+                                        setIsLabHistoryDialogOpen(false);
+                                        const returnTo = isArchivedDossier && patientId && dossierId
+                                          ? `/doctor/consultation?patient=${patientId}&dossier=${dossierId}`
+                                          : undefined;
+                                        navigate(`/doctor/lab-results/${request.id}`, returnTo ? { state: { returnTo } } : {});
+                                      }}
+                                    >
+                                      <Eye className="h-3 w-3" />
+                                      Voir les résultats
+                                    </Button>
                                   )}
                                 </div>
                               </div>
@@ -1148,6 +1325,8 @@ const ConsultationPage: React.FC = () => {
               </div>
             </CardHeader>
             <CardContent>
+              {!isArchivedDossier && (
+              <>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {labExamsCatalog.map((exam) => (
                   <label
@@ -1200,14 +1379,43 @@ const ConsultationPage: React.FC = () => {
                       )}
                     </span>
                   </div>
-                  <Button className="w-full gap-2" onClick={handleLabRequest}>
+                  <Button className="w-full gap-2" onClick={() => setConfirmLabRequestOpen(true)}>
                     <Send className="h-4 w-4" />
                     Envoyer la demande (paiement à l'accueil)
                   </Button>
                 </div>
               )}
+              </>
+              )}
             </CardContent>
           </Card>
+
+          {/* Confirmation envoi demande lab */}
+          <AlertDialog open={confirmLabRequestOpen} onOpenChange={setConfirmLabRequestOpen}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Envoyer la demande de laboratoire</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Êtes-vous sûr de vouloir envoyer cette demande de {selectedExams.length} examen(s) de laboratoire ?
+                  Le patient devra effectuer le paiement à l'accueil avant la réalisation des examens.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Annuler</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setConfirmLabRequestOpen(false);
+                    handleLabRequest();
+                  }}
+                  className="gap-2"
+                >
+                  <Send className="h-4 w-4" />
+                  Envoyer la demande
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </TabsContent>
 
         {/* Imaging Tab */}
@@ -1257,10 +1465,26 @@ const ConsultationPage: React.FC = () => {
                             : 'Date inconnue'}
                         </p>
                       </div>
-                      <div className="text-right">
+                      <div className="text-right flex flex-col items-end gap-2">
                         <p className="text-sm font-medium">
                           {formatPrice(request.totalAmount || 0)}
                         </p>
+                        {(request.status === 'sent_to_doctor' || request.results) && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="gap-1 text-xs"
+                            onClick={() => {
+                              const returnTo = isArchivedDossier && patientId && dossierId
+                                ? `/doctor/consultation?patient=${patientId}&dossier=${dossierId}`
+                                : undefined;
+                              navigate(`/doctor/lab-results/${request.id}`, returnTo ? { state: { returnTo } } : {});
+                            }}
+                          >
+                            <Eye className="h-3 w-3" />
+                            Voir les résultats
+                          </Button>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -1269,7 +1493,8 @@ const ConsultationPage: React.FC = () => {
             </Card>
           )}
 
-          {/* New request form */}
+          {/* New request form - hidden for archived dossiers */}
+          {!isArchivedDossier && (
           <Card>
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2">
@@ -1330,7 +1555,7 @@ const ConsultationPage: React.FC = () => {
                       )}
                     </span>
                   </div>
-                  <Button className="w-full gap-2" onClick={handleImagingRequest}>
+                  <Button className="w-full gap-2" onClick={() => setConfirmImagingRequestOpen(true)}>
                     <Send className="h-4 w-4" />
                     Envoyer la demande (paiement à l'accueil)
                   </Button>
@@ -1338,94 +1563,199 @@ const ConsultationPage: React.FC = () => {
               )}
             </CardContent>
           </Card>
+          )}
+
+          {/* Confirmation envoi demande imagerie */}
+          <AlertDialog open={confirmImagingRequestOpen} onOpenChange={setConfirmImagingRequestOpen}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Envoyer la demande d'imagerie</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Êtes-vous sûr de vouloir envoyer cette demande de {selectedImagingExams.length} examen(s) d'imagerie ?
+                  Le patient devra effectuer le paiement à l'accueil avant la réalisation des examens.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Annuler</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setConfirmImagingRequestOpen(false);
+                    handleImagingRequest();
+                  }}
+                  className="gap-2"
+                >
+                  <Send className="h-4 w-4" />
+                  Envoyer la demande
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </TabsContent>
 
-        {/* Other Tab */}
+        {/* Other Tab - Demande externe (labo/imagerie hors établissement) */}
         <TabsContent value="other" className="mt-6">
           <Card>
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2">
-                <MoreHorizontal className="h-5 w-5 text-primary" />
-                Autres items
+                <FileText className="h-5 w-5 text-primary" />
+                Demande externe (labo / imagerie)
               </CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Saisir les demandes d&apos;examens réalisés en dehors de l&apos;établissement, enregistrer puis générer un PDF.
+              </p>
             </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {otherItems.map((item, index) => (
-                  <div key={index} className="p-4 rounded-lg border bg-secondary/20">
-                    <div className="space-y-3">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex-1 space-y-3">
-                          <div className="space-y-2">
-                            <Label>Nom de l'item</Label>
-                            <Input
-                              placeholder="Ex: Certificat médical, Attestation..."
-                              value={item.name}
-                              onChange={(e) => {
-                                const updated = [...otherItems];
-                                updated[index].name = e.target.value;
-                                setOtherItems(updated);
-                              }}
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label>Description</Label>
-                            <Textarea
-                              placeholder="Description de l'item..."
-                              rows={3}
-                              value={item.description}
-                              onChange={(e) => {
-                                const updated = [...otherItems];
-                                updated[index].description = e.target.value;
-                                setOtherItems(updated);
-                              }}
-                            />
-                          </div>
-                        </div>
-                        {otherItems.length > 1 && (
+            <CardContent className="space-y-6">
+              {/* Enregistrer + Imprimer - à côté l'un de l'autre */}
+              {!isArchivedDossier && (
+                <div className="flex gap-3">
+                  <Button
+                    className="gap-2"
+                    onClick={() => {
+                      const valid = otherItems.filter((item) => item.name);
+                      if (valid.length === 0) {
+                        toast.error('Veuillez remplir au moins un item');
+                        return;
+                      }
+                      setConfirmSaveOtherOpen(true);
+                    }}
+                  >
+                    <Save className="h-4 w-4" />
+                    Enregistrer
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="gap-2"
+                    onClick={() => {
+                      if (savedCustomItems.length > 0) {
+                        handlePrintCustomItem(savedCustomItems[0].id);
+                      } else {
+                        toast.error("Enregistrez d'abord vos demandes pour pouvoir imprimer");
+                      }
+                    }}
+                    disabled={!!isPrintingCustomItem}
+                  >
+                    {isPrintingCustomItem ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Printer className="h-4 w-4" />
+                    )}
+                    Imprimer
+                  </Button>
+                </div>
+              )}
+
+              {/* Saved items with Print + Delete */}
+              {isLoadingCustomItems ? (
+                <div className="flex items-center justify-center py-8 text-muted-foreground">
+                  <Loader2 className="h-6 w-6 animate-spin mr-2" />
+                  Chargement...
+                </div>
+              ) : savedCustomItems.length > 0 ? (
+                <div className="space-y-3">
+                  <Label className="text-sm font-medium">Documents enregistrés</Label>
+                  {savedCustomItems.map((item: any) => (
+                    <div key={item.id} className="p-4 rounded-lg border bg-secondary/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium truncate">{item.name}</p>
+                        <p className="text-sm text-muted-foreground line-clamp-2 mt-1">{item.description || '—'}</p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="gap-2"
+                          onClick={() => handlePrintCustomItem(item.id)}
+                          disabled={!!isPrintingCustomItem}
+                        >
+                          {isPrintingCustomItem === item.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Printer className="h-4 w-4" />
+                          )}
+                          Imprimer PDF
+                        </Button>
+                        {!isArchivedDossier && (
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => {
-                              const updated = otherItems.filter((_, i) => i !== index);
-                              setOtherItems(updated);
-                            }}
-                            className="mt-8"
+                            className="text-destructive hover:bg-destructive/10"
+                            onClick={() => setCustomItemToDelete({ id: item.id, name: item.name })}
+                            disabled={!!customItemToDelete}
                           >
-                            <X className="h-4 w-4" />
+                            <Trash2 className="h-4 w-4" />
                           </Button>
                         )}
                       </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              ) : null}
 
-              <Button
-                variant="outline"
-                className="w-full mt-4"
-                onClick={() => {
-                  setOtherItems([...otherItems, { name: '', description: '' }]);
-                }}
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Ajouter un item
-              </Button>
-
-              <div className="flex flex-col sm:flex-row gap-3 mt-6">
-                <Button variant="outline" className="flex-1 gap-2" onClick={() => {
-                  toast.success('Items enregistrés');
-                }}>
-                  <Save className="h-4 w-4" />
-                  Enregistrer
-                </Button>
-                <Button variant="outline" className="flex-1 gap-2" onClick={() => {
-                  toast.success('Impression lancée');
-                }}>
-                  <Printer className="h-4 w-4" />
-                  Imprimer
-                </Button>
-              </div>
+              {/* Form for new items */}
+              {!isArchivedDossier && (
+                <div className="space-y-4">
+                  <Label className="text-sm font-medium">Nouveau résultat externe</Label>
+                  {otherItems.map((item, index) => (
+                    <div key={index} className="p-4 rounded-lg border bg-muted/30">
+                      <div className="space-y-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex-1 space-y-3">
+                            <div className="space-y-2">
+                              <Label>Nom de l&apos;examen</Label>
+                              <Input
+                                placeholder="Ex: NFS externe, Radio thorax externe..."
+                                value={item.name}
+                                onChange={(e) => {
+                                  const updated = [...otherItems];
+                                  updated[index].name = e.target.value;
+                                  setOtherItems(updated);
+                                }}
+                                className="bg-background"
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label>Détails / Résultats</Label>
+                              <Textarea
+                                placeholder="Décrivez les résultats ou copiez le rapport..."
+                                rows={4}
+                                value={item.description}
+                                onChange={(e) => {
+                                  const updated = [...otherItems];
+                                  updated[index].description = e.target.value;
+                                  setOtherItems(updated);
+                                }}
+                                className="bg-background"
+                              />
+                            </div>
+                          </div>
+                          {otherItems.length > 1 && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                const updated = otherItems.filter((_, i) => i !== index);
+                                setOtherItems(updated);
+                              }}
+                              className="mt-8"
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => setOtherItems([...otherItems, { name: '', description: '' }])}
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Ajouter un résultat
+                  </Button>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -1461,6 +1791,8 @@ const ConsultationPage: React.FC = () => {
                                   setPrescriptionItems(updated);
                                 }
                               }}
+                              readOnly={isArchivedDossier}
+                              className={isArchivedDossier ? 'bg-muted' : ''}
                             />
                           </div>
                           <div className="space-y-1">
@@ -1476,6 +1808,8 @@ const ConsultationPage: React.FC = () => {
                                   setPrescriptionItems(updated);
                                 }
                               }}
+                              readOnly={isArchivedDossier}
+                              className={isArchivedDossier ? 'bg-muted' : ''}
                             />
                           </div>
                           <div className="space-y-1">
@@ -1491,6 +1825,8 @@ const ConsultationPage: React.FC = () => {
                                   setPrescriptionItems(updated);
                                 }
                               }}
+                              readOnly={isArchivedDossier}
+                              className={isArchivedDossier ? 'bg-muted' : ''}
                             />
                           </div>
                           <div className="space-y-1">
@@ -1506,6 +1842,8 @@ const ConsultationPage: React.FC = () => {
                                   setPrescriptionItems(updated);
                                 }
                               }}
+                              readOnly={isArchivedDossier}
+                              className={isArchivedDossier ? 'bg-muted' : ''}
                             />
                           </div>
                           <div className="space-y-1">
@@ -1522,6 +1860,8 @@ const ConsultationPage: React.FC = () => {
                                   setPrescriptionItems(updated);
                                 }
                               }}
+                              readOnly={isArchivedDossier}
+                              className={isArchivedDossier ? 'bg-muted' : ''}
                             />
                           </div>
                           <div className="space-y-1">
@@ -1537,9 +1877,22 @@ const ConsultationPage: React.FC = () => {
                                   setPrescriptionItems(updated);
                                 }
                               }}
+                              readOnly={isArchivedDossier}
+                              className={isArchivedDossier ? 'bg-muted' : ''}
                             />
                           </div>
                         </div>
+                        {!isArchivedDossier && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="mt-3 text-destructive hover:text-destructive"
+                            onClick={() => setItemToDelete({ id: item.id!, medication: item.medication || 'ce médicament' })}
+                          >
+                            <X className="h-4 w-4 mr-2" />
+                            Supprimer
+                          </Button>
+                        )}
                       </div>
                     ))}
                 </div>
@@ -1547,7 +1900,8 @@ const ConsultationPage: React.FC = () => {
             </Card>
           )}
 
-          {/* New prescription items form */}
+          {/* New prescription items form - hidden for archived dossiers */}
+          {!isArchivedDossier && (
           <Card>
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2">
@@ -1638,20 +1992,18 @@ const ConsultationPage: React.FC = () => {
                             />
                           </div>
                         </div>
-                        {prescriptionItems.filter(item => !item.id).length > 1 && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                              const updated = prescriptionItems.filter((_, i) => i !== globalIndex);
-                              setPrescriptionItems(updated);
-                            }}
-                            className="mt-3"
-                          >
-                            <X className="h-4 w-4 mr-2" />
-                            Supprimer
-                          </Button>
-                        )}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="mt-3 text-destructive hover:text-destructive"
+                          onClick={() => {
+                            const updated = prescriptionItems.filter((_, i) => i !== globalIndex);
+                            setPrescriptionItems(updated);
+                          }}
+                        >
+                          <X className="h-4 w-4 mr-2" />
+                          Supprimer
+                        </Button>
                       </div>
                     );
                   })}
@@ -1667,17 +2019,27 @@ const ConsultationPage: React.FC = () => {
               </Button>
 
               <div className="flex flex-col sm:flex-row gap-3 mt-6">
-                <Button variant="outline" className="flex-1 gap-2" onClick={handleSavePrescription}>
+                <Button variant="outline" className="flex-1 gap-2" onClick={() => setIsSavePrescriptionDialogOpen(true)}>
                   <Save className="h-4 w-4" />
                   Enregistrer
                 </Button>
-                <Button variant="outline" className="flex-1 gap-2">
-                  <Printer className="h-4 w-4" />
-                  Imprimer
+                <Button
+                  variant="outline"
+                  className="flex-1 gap-2"
+                  onClick={handlePrintPrescription}
+                  disabled={isPrintingPrescription}
+                >
+                  {isPrintingPrescription ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Printer className="h-4 w-4" />
+                  )}
+                  {isPrintingPrescription ? 'Préparation...' : 'Imprimer'}
                 </Button>
               </div>
             </CardContent>
           </Card>
+          )}
         </TabsContent>
       </Tabs>
 
@@ -1699,6 +2061,96 @@ const ConsultationPage: React.FC = () => {
               }}
             >
               Terminer
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete Prescription Item Confirmation */}
+      <AlertDialog open={!!itemToDelete} onOpenChange={(open) => !open && setItemToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Supprimer le médicament</AlertDialogTitle>
+            <AlertDialogDescription>
+              Êtes-vous sûr de vouloir supprimer « {itemToDelete?.medication} » de l'ordonnance ?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeletingItem}>Annuler</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeletePrescriptionItem}
+              disabled={isDeletingItem}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeletingItem ? 'Suppression...' : 'Supprimer'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Save Demande Externe Confirmation */}
+      <AlertDialog open={confirmSaveOtherOpen} onOpenChange={setConfirmSaveOtherOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Enregistrer les demandes externes</AlertDialogTitle>
+            <AlertDialogDescription>
+              Êtes-vous sûr de vouloir enregistrer ces demandes ? Elles seront ajoutées au dossier du patient.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annuler</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setConfirmSaveOtherOpen(false);
+                handleSaveOther();
+              }}
+            >
+              Enregistrer
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete Demande Externe Confirmation */}
+      <AlertDialog open={!!customItemToDelete} onOpenChange={(open) => !open && setCustomItemToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Supprimer la demande externe</AlertDialogTitle>
+            <AlertDialogDescription>
+              Êtes-vous sûr de vouloir supprimer « {customItemToDelete?.name} » ?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeletingCustomItem}>Annuler</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteCustomItem}
+              disabled={isDeletingCustomItem}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeletingCustomItem ? 'Suppression...' : 'Supprimer'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Save Prescription Confirmation */}
+      <AlertDialog open={isSavePrescriptionDialogOpen} onOpenChange={setIsSavePrescriptionDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Enregistrer l'ordonnance</AlertDialogTitle>
+            <AlertDialogDescription>
+              Êtes-vous sûr de vouloir enregistrer cette ordonnance ? Les médicaments seront ajoutés au dossier du patient.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annuler</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setIsSavePrescriptionDialogOpen(false);
+                handleSavePrescription();
+              }}
+            >
+              Enregistrer
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -16,6 +16,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
 import {
   UserPlus,
@@ -24,7 +35,6 @@ import {
   Phone,
   Mail,
   MapPin,
-  AlertCircle,
   ArrowRight,
   ArrowLeft,
   CreditCard,
@@ -35,6 +45,8 @@ import {
   User,
   Fingerprint,
   Clock,
+  ShieldCheck,
+  Percent,
 } from 'lucide-react';
 import type { Patient, Bed } from '@/types';
 import { 
@@ -47,6 +59,8 @@ import {
 } from '@/services/api/receptionService';
 import { getConsultationPrice } from '@/services/api/consultationPriceService';
 import { getPatients } from '@/services/api/patientsService';
+import { getInsuranceEstablishments } from '@/services/api/insuranceEstablishmentsService';
+import type { InsuranceEstablishment } from '@/services/api/insuranceEstablishmentsService';
 
 const steps: Step[] = [
   { id: 1, title: 'Paiement', description: 'Consultation', icon: CreditCard },
@@ -68,6 +82,10 @@ const RegisterPatient: React.FC = () => {
   const [createdPatientId, setCreatedPatientId] = useState<string | null>(null);
   const [createdPaymentId, setCreatedPaymentId] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [insuranceEstablishments, setInsuranceEstablishments] = useState<InsuranceEstablishment[]>([]);
+  const [isLoadingInsurance, setIsLoadingInsurance] = useState(false);
+  const [confirmPaymentOpen, setConfirmPaymentOpen] = useState(false);
+  const [confirmAssignmentOpen, setConfirmAssignmentOpen] = useState(false);
 
   // Reset step when tab changes
   useEffect(() => {
@@ -77,6 +95,8 @@ const RegisterPatient: React.FC = () => {
     setSearchQuery('');
     setSelectedBed('none');
     setBedTypeFilter('all');
+    setInsuranceData({ isInsured: false, establishmentId: '', coveragePercent: 0, memberNumber: '' });
+    setDiscountData({ hasDiscount: false, discountPercent: 0 });
   }, [activeTab]);
 
   // Form data
@@ -100,6 +120,20 @@ const RegisterPatient: React.FC = () => {
     reference: '',
   });
 
+  // Assurance (mock — à brancher sur le backend)
+  const [insuranceData, setInsuranceData] = useState({
+    isInsured: false,
+    establishmentId: '',
+    coveragePercent: 0,
+    memberNumber: '', // numéro identifiant chez l'assureur
+  });
+
+  // Remise (mock — à brancher sur le backend)
+  const [discountData, setDiscountData] = useState({
+    hasDiscount: false,
+    discountPercent: 0,
+  });
+
   // Bed selection
   const [selectedBed, setSelectedBed] = useState<string>('none');
   const [bedTypeFilter, setBedTypeFilter] = useState<'all' | 'classic' | 'vip'>('all');
@@ -111,12 +145,13 @@ const RegisterPatient: React.FC = () => {
   // Assignment data
   const [selectedDoctor, setSelectedDoctor] = useState('');
 
-  // Load available beds and consultation price
+  // Load available beds, consultation price and insurance establishments (actives only)
   useEffect(() => {
     const loadData = async () => {
       try {
         setIsLoadingBeds(true);
         setIsLoadingPrice(true);
+        setIsLoadingInsurance(true);
 
         // Load available beds
         const bedsResponse = await getAvailableBeds();
@@ -132,6 +167,15 @@ const RegisterPatient: React.FC = () => {
         if (priceResponse.success && priceResponse.data) {
           setConsultationPrice(priceResponse.data.price || 0);
         }
+
+        // Load insurance establishments (actives only for selector)
+        const insResponse = await getInsuranceEstablishments({ isActive: true });
+        if (insResponse.success && insResponse.data) {
+          const list = Array.isArray(insResponse.data)
+            ? insResponse.data
+            : (insResponse.data as any).establishments ?? [];
+          setInsuranceEstablishments(list);
+        }
       } catch (error) {
         console.error('Erreur lors du chargement des données:', error);
         toast.error('Erreur', {
@@ -140,6 +184,7 @@ const RegisterPatient: React.FC = () => {
       } finally {
         setIsLoadingBeds(false);
         setIsLoadingPrice(false);
+        setIsLoadingInsurance(false);
       }
     };
 
@@ -179,13 +224,29 @@ const RegisterPatient: React.FC = () => {
     return availableBeds.filter((bed) => bed.type === bedTypeFilter);
   }, [availableBeds, bedTypeFilter]);
 
-  // Calculate total amount (consultation + bed fee)
-  const totalAmount = useMemo(() => {
+  // Montant de base (consultation + lit)
+  const baseAmount = useMemo(() => {
     const bedFee = selectedBed && selectedBed !== 'none' 
       ? availableBeds.find((b) => b.id === selectedBed)?.additionalFee || 0 
       : 0;
     return consultationPrice + bedFee;
   }, [selectedBed, consultationPrice, availableBeds]);
+
+  // Déduction assurance puis remise (mock — logique à valider côté backend)
+  const { insuranceDeduction, discountDeduction, totalAmount } = useMemo(() => {
+    const insDed = insuranceData.isInsured && insuranceData.coveragePercent > 0
+      ? baseAmount * (insuranceData.coveragePercent / 100)
+      : 0;
+    const afterInsurance = baseAmount - insDed;
+    const discDed = discountData.hasDiscount && discountData.discountPercent > 0
+      ? afterInsurance * (discountData.discountPercent / 100)
+      : 0;
+    return {
+      insuranceDeduction: insDed,
+      discountDeduction: discDed,
+      totalAmount: Math.max(0, afterInsurance - discDed),
+    };
+  }, [baseAmount, insuranceData.isInsured, insuranceData.coveragePercent, discountData.hasDiscount, discountData.discountPercent]);
 
   // Update payment amount when bed changes or consultation price loads
   useEffect(() => {
@@ -233,11 +294,13 @@ const RegisterPatient: React.FC = () => {
       const response = await getPatients({ search: query, limit: 10 });
       
       if (response.success && response.data) {
-        const patients = response.data.patients || [];
+        const patients = Array.isArray(response.data)
+          ? response.data
+          : (response.data.patients || []);
         const foundPatient = patients.find(
           (p: Patient) =>
-            p.phone.includes(query) ||
-            p.vitalisId.toLowerCase().includes(query.toLowerCase())
+            (p.phone && p.phone.includes(query)) ||
+            (p.vitalisId && p.vitalisId.toLowerCase().includes(query.toLowerCase()))
         );
 
         if (foundPatient) {
@@ -254,6 +317,17 @@ const RegisterPatient: React.FC = () => {
             emergencyContact: '',
             bloodType: foundPatient.bloodType || '',
             allergies: foundPatient.allergies?.join(', ') || '',
+          });
+          // Pre-fill assurance et remise pour éviter d'écraser les données existantes
+          setInsuranceData({
+            isInsured: !!foundPatient.isInsured,
+            establishmentId: foundPatient.insuranceEstablishmentId || foundPatient.insuranceEstablishment?.id || '',
+            coveragePercent: foundPatient.insuranceCoveragePercent ?? 0,
+            memberNumber: foundPatient.insuranceMemberNumber || '',
+          });
+          setDiscountData({
+            hasDiscount: !!(foundPatient.hasDiscount && (foundPatient.discountPercent ?? 0) > 0),
+            discountPercent: foundPatient.discountPercent ?? 0,
           });
           setGeneratedId(foundPatient.vitalisId);
           toast.success('Patient trouvé !', {
@@ -314,144 +388,181 @@ const RegisterPatient: React.FC = () => {
     return true;
   };
 
-  const handleNextStep = async () => {
-    // Payment is always step 1 for both tabs
-    if (currentStep === 1) {
-      // Validate payment
-      if (paymentData.method === 'orange_money' && !paymentData.reference) {
-        toast.error('Veuillez entrer la référence Orange Money');
-        return;
-      }
-      
-      if (activeTab === 'existing') {
-        if (!existingPatient) {
-          toast.error('Veuillez rechercher et sélectionner un patient');
-          return;
-        }
-
-        setIsProcessing(true);
-        try {
-          // Create payment for existing patient
-          const paymentResponse = await registerPatientPayment(existingPatient.id, {
-            method: paymentData.method,
-            amount: totalAmount,
-            type: 'consultation',
-            reference: paymentData.reference || undefined,
-          });
-
-          if (paymentResponse.success && paymentResponse.data) {
-            const paymentId = paymentResponse.data.id || paymentResponse.data.paymentId;
-            setCreatedPaymentId(paymentId);
-
-            // Mark bed as occupied if selected
-            if (selectedBed && selectedBed !== 'none') {
-              try {
-                await occupyBedApi(selectedBed, existingPatient.id);
-                // Reload beds to update availability
-                const bedsResponse = await getAvailableBeds();
-                if (bedsResponse.success && bedsResponse.data) {
-                  const bedsData = Array.isArray(bedsResponse.data) 
-                    ? bedsResponse.data 
-                    : bedsResponse.data.beds || [];
-                  setAvailableBeds(bedsData);
-                }
-              } catch (error) {
-                console.error('Erreur lors de l\'occupation du lit:', error);
-                toast.error('Erreur', {
-                  description: 'Le paiement a été enregistré mais l\'occupation du lit a échoué',
-                });
+  const processPaymentStep = async () => {
+    setConfirmPaymentOpen(false);
+    if (activeTab === 'existing' && existingPatient) {
+      setIsProcessing(true);
+      try {
+        const paymentResponse = await registerPatientPayment(existingPatient.id, {
+          method: paymentData.method,
+          amount: totalAmount,
+          type: 'consultation',
+          reference: paymentData.reference || undefined,
+          insurance: insuranceData.isInsured
+            ? {
+                isInsured: true,
+                establishmentId: insuranceData.establishmentId || undefined,
+                coveragePercent: insuranceData.coveragePercent,
+                memberNumber: insuranceData.memberNumber?.trim() || undefined,
               }
-            }
+            : { isInsured: false },
+          discount: {
+            hasDiscount: discountData.hasDiscount,
+            discountPercent: discountData.hasDiscount ? discountData.discountPercent : 0,
+          },
+        });
 
-            toast.success('Paiement enregistré !', {
-              description: `Ligne de paiement créée pour ${existingPatient.firstName} ${existingPatient.lastName}`,
-            });
-            // Skip ID generation step, go directly to doctor assignment (step 3)
-            setCurrentStep(3);
-          } else {
-            toast.error('Erreur', {
-              description: paymentResponse.message || 'Impossible d\'enregistrer le paiement',
-            });
-          }
-        } catch (error: any) {
-          console.error('Erreur lors de l\'enregistrement du paiement:', error);
-          toast.error('Erreur', {
-            description: error?.message || 'Impossible d\'enregistrer le paiement',
-          });
-        } finally {
-          setIsProcessing(false);
-        }
-        return;
-      } else {
-        // For new patient, validate form first
-        if (!validateStep1()) return;
+        if (paymentResponse.success && paymentResponse.data) {
+          const paymentId = paymentResponse.data.id || paymentResponse.data.paymentId;
+          setCreatedPaymentId(paymentId);
 
-        setIsProcessing(true);
-        try {
-          // Register new patient with payment
-          const registerResponse = await registerPatientApi({
-            firstName: formData.firstName.trim(),
-            lastName: formData.lastName.trim(),
-            dateOfBirth: formData.dateOfBirth,
-            gender: formData.gender as 'M' | 'F',
-            phone: formData.phone, // Already has +224 prefix
-            email: formData.email?.trim() || undefined,
-            address: formData.address?.trim() || undefined,
-            emergencyContact: formData.emergencyContact?.trim() || undefined,
-            payment: {
-              method: paymentData.method,
-              amount: totalAmount,
-              reference: paymentData.reference || undefined,
-            },
-            bedId: selectedBed && selectedBed !== 'none' ? selectedBed : undefined,
-            assignDoctor: false, // Will assign in step 3
-          });
-
-          if (registerResponse.success && registerResponse.data) {
-            const patientData = registerResponse.data.patient || registerResponse.data;
-            const patientId = patientData.id;
-            const vitalisId = patientData.vitalisId;
-            const paymentId = registerResponse.data.payment?.id || registerResponse.data.paymentId;
-
-            setCreatedPatientId(patientId);
-            setCreatedPaymentId(paymentId);
-            setGeneratedId(vitalisId);
-
-            // Bed is already occupied by the backend if bedId was provided
-            // Reload beds to update availability
-            if (selectedBed && selectedBed !== 'none') {
+          if (selectedBed && selectedBed !== 'none') {
+            try {
+              await occupyBedApi(selectedBed, existingPatient.id);
               const bedsResponse = await getAvailableBeds();
               if (bedsResponse.success && bedsResponse.data) {
-                const bedsData = Array.isArray(bedsResponse.data) 
-                  ? bedsResponse.data 
+                const bedsData = Array.isArray(bedsResponse.data)
+                  ? bedsResponse.data
                   : bedsResponse.data.beds || [];
                 setAvailableBeds(bedsData);
               }
+            } catch (error) {
+              console.error('Erreur lors de l\'occupation du lit:', error);
+              toast.error('Erreur', {
+                description: 'Le paiement a été enregistré mais l\'occupation du lit a échoué',
+              });
             }
-
-            toast.success('Patient créé avec succès !', {
-              description: `ID Vitalis: ${vitalisId}`,
-            });
-            setCurrentStep(2);
-          } else {
-            toast.error('Erreur', {
-              description: registerResponse.message || 'Impossible de créer le patient',
-            });
           }
-        } catch (error: any) {
-          console.error('Erreur lors de la création du patient:', error);
-          toast.error('Erreur', {
-            description: error?.message || 'Impossible de créer le patient',
+
+          toast.success('Paiement enregistré !', {
+            description: `Ligne de paiement créée pour ${existingPatient.firstName} ${existingPatient.lastName}`,
           });
-        } finally {
-          setIsProcessing(false);
+          setCurrentStep(3);
+        } else {
+          toast.error('Erreur', {
+            description: paymentResponse.message || 'Impossible d\'enregistrer le paiement',
+          });
         }
-        return;
+      } catch (error: any) {
+        console.error('Erreur lors de l\'enregistrement du paiement:', error);
+        toast.error('Erreur', {
+          description: error?.message || 'Impossible d\'enregistrer le paiement',
+        });
+      } finally {
+        setIsProcessing(false);
       }
+      return;
     }
 
+    if (activeTab === 'new') {
+      setIsProcessing(true);
+      try {
+        const registerResponse = await registerPatientApi({
+          firstName: formData.firstName.trim(),
+          lastName: formData.lastName.trim(),
+          dateOfBirth: formData.dateOfBirth,
+          gender: formData.gender as 'M' | 'F',
+          phone: formData.phone,
+          email: formData.email?.trim() || undefined,
+          address: formData.address?.trim() || undefined,
+          emergencyContact: formData.emergencyContact?.trim() || undefined,
+          payment: {
+            method: paymentData.method,
+            amount: totalAmount,
+            reference: paymentData.reference || undefined,
+          },
+          bedId: selectedBed && selectedBed !== 'none' ? selectedBed : undefined,
+          assignDoctor: false,
+          insurance: insuranceData.isInsured
+            ? {
+                isInsured: true,
+                establishmentId: insuranceData.establishmentId || undefined,
+                coveragePercent: insuranceData.coveragePercent,
+                memberNumber: insuranceData.memberNumber?.trim() || undefined,
+              }
+            : { isInsured: false },
+          discount: {
+            hasDiscount: discountData.hasDiscount,
+            discountPercent: discountData.hasDiscount ? discountData.discountPercent : 0,
+          },
+        });
+
+        if (registerResponse.success && registerResponse.data) {
+          const patientData = registerResponse.data.patient || registerResponse.data;
+          const patientId = patientData.id;
+          const vitalisId = patientData.vitalisId;
+          const paymentId = registerResponse.data.payment?.id || registerResponse.data.paymentId;
+
+          setCreatedPatientId(patientId);
+          setCreatedPaymentId(paymentId);
+          setGeneratedId(vitalisId);
+
+          if (selectedBed && selectedBed !== 'none') {
+            const bedsResponse = await getAvailableBeds();
+            if (bedsResponse.success && bedsResponse.data) {
+              const bedsData = Array.isArray(bedsResponse.data)
+                ? bedsResponse.data
+                : bedsResponse.data.beds || [];
+              setAvailableBeds(bedsData);
+            }
+          }
+
+          toast.success('Patient créé avec succès !', {
+            description: `ID Vitalis: ${vitalisId}`,
+          });
+          setCurrentStep(2);
+        } else {
+          toast.error('Erreur', {
+            description: registerResponse.message || 'Impossible de créer le patient',
+          });
+        }
+      } catch (error: any) {
+        console.error('Erreur lors de la création du patient:', error);
+        toast.error('Erreur', {
+          description: error?.message || 'Impossible de créer le patient',
+        });
+      } finally {
+        setIsProcessing(false);
+      }
+    }
+  };
+
+  const runPaymentStep = () => {
+    if (paymentData.method === 'orange_money' && !paymentData.reference) {
+      toast.error('Veuillez entrer la référence Orange Money');
+      return;
+    }
+    if (activeTab === 'existing') {
+      if (!existingPatient) {
+        toast.error('Veuillez rechercher et sélectionner un patient');
+        return;
+      }
+    } else {
+      if (!validateStep1()) return;
+    }
+    if (insuranceData.isInsured && !insuranceData.memberNumber?.trim()) {
+      toast.error('Numéro identifiant assureur requis', {
+        description: 'Veuillez saisir le numéro d\'identifiant chez l\'assureur lorsque l\'assurance est activée.',
+      });
+      return;
+    }
+    setConfirmPaymentOpen(true);
+  };
+
+  const handleNextStep = async () => {
+    // Étape 1 : Paiement (patient nouveau)
+    if (currentStep === 1) {
+      runPaymentStep();
+      return;
+    }
+
+    // Étape 2 : Patient existant = formulaire paiement visible ici → enregistrer paiement puis passer au médecin
+    //           Patient nouveau = ID déjà généré → passer directement au médecin
     if (currentStep === 2) {
-      // ID already generated for new patient, just move to doctor assignment
+      if (activeTab === 'existing' && existingPatient) {
+        runPaymentStep();
+        return;
+      }
       setCurrentStep(3);
       return;
     }
@@ -477,44 +588,43 @@ const RegisterPatient: React.FC = () => {
         return;
       }
 
-      setIsProcessing(true);
-      try {
-        // Create doctor assignment
-        const assignmentResponse = await createAssignment({
-          patientId,
-          doctorId: selectedDoctor,
-          paymentId: createdPaymentId,
-        });
-
-        if (assignmentResponse.success) {
-          const doctor = doctors.find((d) => d.id === selectedDoctor);
-          toast.success('Processus terminé !', {
-            description: `Patient assigné à ${doctor?.name || 'médecin'}`,
-          });
-          
-          // Reset form and navigate
-          setTimeout(() => {
-            navigate('/reception');
-          }, 1500);
-        } else {
-          toast.error('Erreur', {
-            description: assignmentResponse.message || 'Impossible d\'assigner le médecin',
-          });
-        }
-      } catch (error: any) {
-        console.error('Erreur lors de l\'assignation du médecin:', error);
-        toast.error('Erreur', {
-          description: error?.message || 'Impossible d\'assigner le médecin',
-        });
-      } finally {
-        setIsProcessing(false);
-      }
+      setConfirmAssignmentOpen(true);
       return;
     }
   };
 
   const handlePrevStep = () => {
     setCurrentStep((prev) => Math.max(prev - 1, 1));
+  };
+
+  const handleConfirmAssignment = async () => {
+    setConfirmAssignmentOpen(false);
+    const patientId = activeTab === 'existing' ? existingPatient?.id : createdPatientId;
+    if (!patientId || !createdPaymentId || !selectedDoctor) return;
+    setIsProcessing(true);
+    try {
+      const assignmentResponse = await createAssignment({
+        patientId,
+        doctorId: selectedDoctor,
+        paymentId: createdPaymentId,
+      });
+      if (assignmentResponse.success) {
+        const doctor = doctors.find((d) => d.id === selectedDoctor);
+        toast.success('Processus terminé !', {
+          description: `Patient assigné à ${doctor?.name || 'médecin'}`,
+        });
+        setTimeout(() => navigate('/reception'), 1500);
+      } else {
+        toast.error('Erreur', {
+          description: assignmentResponse.message || 'Impossible d\'assigner le médecin',
+        });
+      }
+    } catch (error: any) {
+      console.error('Erreur lors de l\'assignation du médecin:', error);
+      toast.error('Erreur', { description: error?.message || 'Impossible d\'assigner le médecin' });
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   return (
@@ -634,6 +744,123 @@ const RegisterPatient: React.FC = () => {
                   </div>
                 </div>
 
+                {/* Assurance — patient déjà enregistré */}
+                <div className="space-y-4 rounded-lg border p-4 bg-card">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <ShieldCheck className="h-5 w-5 text-primary" />
+                      <span className="font-medium">Patient assuré</span>
+                    </div>
+                    <Switch
+                      checked={insuranceData.isInsured}
+                      onCheckedChange={(checked) =>
+                        setInsuranceData((prev) => ({
+                          ...prev,
+                          isInsured: checked,
+                          establishmentId: checked ? prev.establishmentId : '',
+                          coveragePercent: checked ? prev.coveragePercent : 0,
+                          memberNumber: checked ? prev.memberNumber : '',
+                        }))
+                      }
+                    />
+                  </div>
+                  {insuranceData.isInsured && (
+                    <div className="space-y-4 pt-2 border-t">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label>Établissement d'assurance</Label>
+                          <Select
+                            value={insuranceData.establishmentId}
+                            onValueChange={(value) =>
+                              setInsuranceData((prev) => ({ ...prev, establishmentId: value }))
+                            }
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Choisir l'établissement" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {insuranceEstablishments.map((est) => (
+                                <SelectItem key={est.id} value={est.id}>
+                                  {est.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Pourcentage de couverture (%)</Label>
+                          <Input
+                            type="number"
+                            min={0}
+                            max={100}
+                            placeholder="Ex: 80"
+                            value={insuranceData.coveragePercent || ''}
+                            onChange={(e) => {
+                              const v = e.target.value === '' ? 0 : Math.min(100, Math.max(0, Number(e.target.value)));
+                              setInsuranceData((prev) => ({ ...prev, coveragePercent: v }));
+                            }}
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            Sera déduit sur consultation, examens labo et imagerie
+                          </p>
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Numéro d'identifiant chez l'assureur <span className="text-destructive">*</span></Label>
+                        <Input
+                          placeholder="Ex. numéro de contrat, matricule..."
+                          value={insuranceData.memberNumber}
+                          onChange={(e) =>
+                            setInsuranceData((prev) => ({ ...prev, memberNumber: e.target.value }))
+                          }
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Numéro de contrat ou matricule fourni par l'assureur
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Remise — patient déjà enregistré */}
+                <div className="space-y-4 rounded-lg border p-4 bg-card">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Percent className="h-5 w-5 text-primary" />
+                      <span className="font-medium">Bénéficie d'une remise</span>
+                    </div>
+                    <Switch
+                      checked={discountData.hasDiscount}
+                      onCheckedChange={(checked) =>
+                        setDiscountData((prev) => ({
+                          ...prev,
+                          hasDiscount: checked,
+                          discountPercent: checked ? prev.discountPercent : 0,
+                        }))
+                      }
+                    />
+                  </div>
+                  {discountData.hasDiscount && (
+                    <div className="pt-2 border-t space-y-2">
+                      <Label>Pourcentage de remise (%)</Label>
+                      <Input
+                        type="number"
+                        min={0}
+                        max={100}
+                        placeholder="Ex: 10"
+                        value={discountData.discountPercent || ''}
+                        onChange={(e) => {
+                          const v = e.target.value === '' ? 0 : Math.min(100, Math.max(0, Number(e.target.value)));
+                          setDiscountData((prev) => ({ ...prev, discountPercent: v }));
+                        }}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Appliqué sur le ou les paiements possibles
+                      </p>
+                    </div>
+                  )}
+                </div>
+
                 {/* Bed selection */}
                 <div className="space-y-3">
                   <Label>Sélectionner un lit (optionnel)</Label>
@@ -711,8 +938,20 @@ const RegisterPatient: React.FC = () => {
                       </span>
                     </div>
                   )}
+                  {insuranceDeduction > 0 && (
+                    <div className="flex items-center justify-between text-sm text-success">
+                      <span className="text-muted-foreground">Déduction assurance ({insuranceData.coveragePercent}%)</span>
+                      <span className="font-medium">-{insuranceDeduction.toLocaleString()} GNF</span>
+                    </div>
+                  )}
+                  {discountDeduction > 0 && (
+                    <div className="flex items-center justify-between text-sm text-success">
+                      <span className="text-muted-foreground">Remise ({discountData.discountPercent}%)</span>
+                      <span className="font-medium">-{discountDeduction.toLocaleString()} GNF</span>
+                    </div>
+                  )}
                   <div className="flex items-center justify-between pt-2 border-t font-semibold text-lg">
-                    <span>Total</span>
+                    <span>Total à payer</span>
                     <span className="text-primary">{totalAmount.toLocaleString()} GNF</span>
                   </div>
                 </div>
@@ -934,6 +1173,123 @@ const RegisterPatient: React.FC = () => {
                 </div>
               </div>
 
+              {/* Assurance — nouveau patient (inscription) */}
+              <div className="space-y-4 rounded-lg border p-4 bg-card">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <ShieldCheck className="h-5 w-5 text-primary" />
+                    <span className="font-medium">Patient assuré</span>
+                  </div>
+                  <Switch
+                    checked={insuranceData.isInsured}
+                    onCheckedChange={(checked) =>
+                      setInsuranceData((prev) => ({
+                        ...prev,
+                        isInsured: checked,
+                        establishmentId: checked ? prev.establishmentId : '',
+                        coveragePercent: checked ? prev.coveragePercent : 0,
+                        memberNumber: checked ? prev.memberNumber : '',
+                      }))
+                    }
+                  />
+                </div>
+                {insuranceData.isInsured && (
+                  <div className="space-y-4 pt-2 border-t">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Établissement d'assurance</Label>
+                        <Select
+                          value={insuranceData.establishmentId}
+                          onValueChange={(value) =>
+                            setInsuranceData((prev) => ({ ...prev, establishmentId: value }))
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Choisir l'établissement" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {insuranceEstablishments.map((est) => (
+                              <SelectItem key={est.id} value={est.id}>
+                                {est.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Pourcentage de couverture (%)</Label>
+                        <Input
+                          type="number"
+                          min={0}
+                          max={100}
+                          placeholder="Ex: 80"
+                          value={insuranceData.coveragePercent || ''}
+                          onChange={(e) => {
+                            const v = e.target.value === '' ? 0 : Math.min(100, Math.max(0, Number(e.target.value)));
+                            setInsuranceData((prev) => ({ ...prev, coveragePercent: v }));
+                          }}
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Sera déduit sur consultation, examens labo et imagerie
+                        </p>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Numéro d'identifiant chez l'assureur <span className="text-destructive">*</span></Label>
+                      <Input
+                        placeholder="Ex. numéro de contrat, matricule..."
+                        value={insuranceData.memberNumber}
+                        onChange={(e) =>
+                          setInsuranceData((prev) => ({ ...prev, memberNumber: e.target.value }))
+                        }
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Numéro de contrat ou matricule fourni par l'assureur
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Remise — nouveau patient (inscription) */}
+              <div className="space-y-4 rounded-lg border p-4 bg-card">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Percent className="h-5 w-5 text-primary" />
+                    <span className="font-medium">Bénéficie d'une remise</span>
+                  </div>
+                  <Switch
+                    checked={discountData.hasDiscount}
+                    onCheckedChange={(checked) =>
+                      setDiscountData((prev) => ({
+                        ...prev,
+                        hasDiscount: checked,
+                        discountPercent: checked ? prev.discountPercent : 0,
+                      }))
+                    }
+                  />
+                </div>
+                {discountData.hasDiscount && (
+                  <div className="pt-2 border-t space-y-2">
+                    <Label>Pourcentage de remise (%)</Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      max={100}
+                      placeholder="Ex: 10"
+                      value={discountData.discountPercent || ''}
+                      onChange={(e) => {
+                        const v = e.target.value === '' ? 0 : Math.min(100, Math.max(0, Number(e.target.value)));
+                        setDiscountData((prev) => ({ ...prev, discountPercent: v }));
+                      }}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Appliqué sur le ou les paiements possibles
+                    </p>
+                  </div>
+                )}
+              </div>
+
               {/* Bed selection */}
               <div className="space-y-3">
                 <Label>Sélectionner un lit (optionnel)</Label>
@@ -1011,11 +1367,23 @@ const RegisterPatient: React.FC = () => {
                       </span>
                     </div>
                   )}
-                <div className="flex items-center justify-between pt-2 border-t font-semibold text-lg">
-                  <span>Total</span>
-                  <span className="text-primary">{totalAmount.toLocaleString()} GNF</span>
+                  {insuranceDeduction > 0 && (
+                    <div className="flex items-center justify-between text-sm text-success">
+                      <span className="text-muted-foreground">Déduction assurance ({insuranceData.coveragePercent}%)</span>
+                      <span className="font-medium">-{insuranceDeduction.toLocaleString()} GNF</span>
+                    </div>
+                  )}
+                  {discountDeduction > 0 && (
+                    <div className="flex items-center justify-between text-sm text-success">
+                      <span className="text-muted-foreground">Remise ({discountData.discountPercent}%)</span>
+                      <span className="font-medium">-{discountDeduction.toLocaleString()} GNF</span>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between pt-2 border-t font-semibold text-lg">
+                    <span>Total à payer</span>
+                    <span className="text-primary">{totalAmount.toLocaleString()} GNF</span>
+                  </div>
                 </div>
-              </div>
 
               {/* Payment method */}
               <div className="space-y-3">
@@ -1235,6 +1603,58 @@ const RegisterPatient: React.FC = () => {
           )}
         </Button>
       </div>
+
+      {/* Alerte de confirmation paiement */}
+      <AlertDialog open={confirmPaymentOpen} onOpenChange={setConfirmPaymentOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmer le paiement</AlertDialogTitle>
+            <AlertDialogDescription>
+              {activeTab === 'existing' && existingPatient ? (
+                <>
+                  Enregistrer le paiement de <strong>{totalAmount.toLocaleString()} GNF</strong> pour{' '}
+                  <strong>{existingPatient.firstName} {existingPatient.lastName}</strong> ?
+                </>
+              ) : (
+                <>
+                  Créer le patient <strong>{formData.firstName} {formData.lastName}</strong> et enregistrer le paiement
+                  de <strong>{totalAmount.toLocaleString()} GNF</strong> ?
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annuler</AlertDialogCancel>
+            <AlertDialogAction onClick={processPaymentStep}>
+              Confirmer le paiement
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Alerte de confirmation assignation médecin */}
+      <AlertDialog open={confirmAssignmentOpen} onOpenChange={setConfirmAssignmentOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmer l'assignation</AlertDialogTitle>
+            <AlertDialogDescription>
+              {(() => {
+                const doctorName = doctors.find((d) => d.id === selectedDoctor)?.name || 'le médecin';
+                const patientName = activeTab === 'existing' && existingPatient
+                  ? `${existingPatient.firstName} ${existingPatient.lastName}`
+                  : `${formData.firstName} ${formData.lastName}`;
+                return <>Confirmer l'assignation de <strong>{patientName}</strong> à <strong>{doctorName}</strong> ?</>;
+              })()}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annuler</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmAssignment}>
+              Confirmer
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

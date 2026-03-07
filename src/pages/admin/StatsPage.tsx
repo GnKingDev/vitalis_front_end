@@ -2,9 +2,11 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { StatsCard } from '@/components/shared/StatsCard';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar as CalendarComponent } from '@/components/ui/calendar';
+import { cn } from '@/lib/utils';
 import {
   Users,
   Stethoscope,
@@ -12,7 +14,7 @@ import {
   CreditCard,
   TrendingUp,
   TrendingDown,
-  Calendar,
+  Calendar as CalendarIcon,
   Clock,
   DollarSign,
   Activity,
@@ -32,7 +34,7 @@ import {
 
 const StatsPage: React.FC = () => {
   const today = new Date().toISOString().split('T')[0];
-  const [selectedDate, setSelectedDate] = useState<string>(today);
+  const [selectedDate, setSelectedDate] = useState<string>('');
   const [stats, setStats] = useState<any>({
     patients: { total: 0, today: 0, thisMonth: 0 },
     consultations: { total: 0, today: 0, completed: 0, inProgress: 0 },
@@ -48,9 +50,8 @@ const StatsPage: React.FC = () => {
     const loadStats = async () => {
       try {
         setIsLoading(true);
-        const filterDate = selectedDate || today;
-        
-        // Utiliser getStatsOverview pour obtenir toutes les statistiques en une seule requête
+        // Pas de date = toutes les statistiques (globales)
+        const filterDate = selectedDate || undefined;
         const overviewResponse = await getStatsOverview(filterDate);
 
         if (overviewResponse.success && overviewResponse.data) {
@@ -123,10 +124,10 @@ const StatsPage: React.FC = () => {
     };
 
     loadStats();
-  }, [selectedDate, today]);
+  }, [selectedDate]);
 
   const formatDate = (dateString: string) => {
-    if (!dateString) return "Aujourd'hui";
+    if (!dateString) return "Toutes périodes";
     const date = new Date(dateString);
     return date.toLocaleDateString('fr-FR', {
       weekday: 'long',
@@ -149,34 +150,55 @@ const StatsPage: React.FC = () => {
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
             <div className="space-y-2 flex-1">
               <Label htmlFor="date-filter" className="flex items-center gap-2">
-                <Calendar className="h-4 w-4" />
+                <CalendarIcon className="h-4 w-4" />
                 Filtrer par date
               </Label>
-              <Input
-                id="date-filter"
-                type="date"
-                value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
-                max={today}
-                className="w-full sm:w-auto"
-              />
-            </div>
-            <div className="flex items-end gap-2">
-              <Button
-                variant="outline"
-                onClick={() => setSelectedDate(today)}
-                disabled={selectedDate === today}
-              >
-                Aujourd'hui
-              </Button>
-              {selectedDate !== today && (
-                <Button
-                  variant="outline"
-                  onClick={() => setSelectedDate(today)}
-                >
-                  Réinitialiser
-                </Button>
-              )}
+              <div className="flex gap-2">
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      id="date-filter"
+                      variant="outline"
+                      className={cn(
+                        "w-full sm:w-auto justify-start text-left font-normal",
+                        !selectedDate && "text-muted-foreground"
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {selectedDate ? (
+                        new Date(selectedDate).toLocaleDateString('fr-FR')
+                      ) : (
+                        <span>Toutes les statistiques</span>
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <CalendarComponent
+                      mode="single"
+                      selected={selectedDate ? new Date(selectedDate) : undefined}
+                      onSelect={(date) => {
+                        if (date) {
+                          setSelectedDate(date.toISOString().split('T')[0]);
+                        } else {
+                          setSelectedDate('');
+                        }
+                      }}
+                      disabled={(date) => date > new Date()}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
+                {selectedDate && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setSelectedDate('')}
+                    className="whitespace-nowrap"
+                  >
+                    Toutes
+                  </Button>
+                )}
+              </div>
             </div>
           </div>
           {selectedDate && (
@@ -230,11 +252,11 @@ const StatsPage: React.FC = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">
-                  {selectedDate === today ? 'Patients aujourd\'hui' : `Patients le ${new Date(selectedDate).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })}`}
+                  {!selectedDate ? 'Patients (toutes périodes)' : selectedDate === today ? 'Patients aujourd\'hui' : `Patients le ${new Date(selectedDate).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })}`}
                 </p>
                 <p className="text-2xl font-bold">{stats.patients.today}</p>
               </div>
-              <Calendar className="h-8 w-8 text-primary opacity-50" />
+              <CalendarIcon className="h-8 w-8 text-primary opacity-50" />
             </div>
           </CardContent>
         </Card>
@@ -243,7 +265,7 @@ const StatsPage: React.FC = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">
-                  {selectedDate === today ? 'Consultations aujourd\'hui' : `Consultations le ${new Date(selectedDate).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })}`}
+                  {!selectedDate ? 'Consultations (toutes périodes)' : selectedDate === today ? 'Consultations aujourd\'hui' : `Consultations le ${new Date(selectedDate).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })}`}
                 </p>
                 <p className="text-2xl font-bold">{stats.consultations.today}</p>
               </div>
@@ -256,7 +278,7 @@ const StatsPage: React.FC = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">
-                  {selectedDate === today ? 'Revenus aujourd\'hui' : `Revenus le ${new Date(selectedDate).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })}`}
+                  {!selectedDate ? 'Revenus (toutes périodes)' : selectedDate === today ? 'Revenus aujourd\'hui' : `Revenus le ${new Date(selectedDate).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })}`}
                 </p>
                 <p className="text-2xl font-bold text-success">
                   {(stats.payments.revenue.today || 0).toLocaleString()} GNF
@@ -271,7 +293,7 @@ const StatsPage: React.FC = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">
-                  {selectedDate === today ? 'Paiements aujourd\'hui' : `Paiements le ${new Date(selectedDate).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })}`}
+                  {!selectedDate ? 'Paiements (toutes périodes)' : selectedDate === today ? 'Paiements aujourd\'hui' : `Paiements le ${new Date(selectedDate).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })}`}
                 </p>
                 <p className="text-2xl font-bold">{stats.payments.today}</p>
               </div>

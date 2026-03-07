@@ -15,6 +15,16 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -31,6 +41,7 @@ import {
 } from '@/components/ui/select';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Switch } from '@/components/ui/switch';
 import {
   Pagination,
   PaginationContent,
@@ -61,14 +72,22 @@ import {
   Phone,
   Mail,
   MapPin,
+  Shield,
+  ShieldCheck,
+  Percent,
 } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar as CalendarComponent } from '@/components/ui/calendar';
+import { cn } from '@/lib/utils';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { toast } from 'sonner';
 import type { LabRequest, Payment } from '@/types';
 import { getReceptionLabPayments, payLabRequest, exportReceptionLabPayments } from '@/services/api/receptionService';
+import { getInsuranceEstablishments } from '@/services/api/insuranceEstablishmentsService';
+import type { InsuranceEstablishment } from '@/services/api/insuranceEstablishmentsService';
 import { getLabRequests } from '@/services/api/labService';
-import { getImagingRequests } from '@/services/api/imagingService';
 import { getUsers } from '@/services/api/usersService';
+import { PatientInsuranceDiscount } from '@/components/shared/PatientInsuranceDiscount';
 
 const LabPaymentsPage: React.FC = () => {
   const { user } = useAuth();
@@ -77,9 +96,16 @@ const LabPaymentsPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'paid'>('all');
   const [dateFilter, setDateFilter] = useState('');
+  const [insuranceFilter, setInsuranceFilter] = useState<'all' | 'yes' | 'no'>('all');
+  const [establishmentFilter, setEstablishmentFilter] = useState<string>('');
+  const [discountFilter, setDiscountFilter] = useState<'all' | 'yes' | 'no'>('all');
   const [appliedSearch, setAppliedSearch] = useState('');
   const [appliedStatusFilter, setAppliedStatusFilter] = useState<'all' | 'pending' | 'paid'>('all');
   const [appliedDateFilter, setAppliedDateFilter] = useState('');
+  const [appliedInsuranceFilter, setAppliedInsuranceFilter] = useState<'all' | 'yes' | 'no'>('all');
+  const [appliedEstablishmentFilter, setAppliedEstablishmentFilter] = useState<string>('');
+  const [appliedDiscountFilter, setAppliedDiscountFilter] = useState<'all' | 'yes' | 'no'>('all');
+  const [insuranceEstablishments, setInsuranceEstablishments] = useState<InsuranceEstablishment[]>([]);
   const [selectedRequest, setSelectedRequest] = useState<any | null>(null);
   const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'orange_money'>('cash');
@@ -87,6 +113,18 @@ const LabPaymentsPage: React.FC = () => {
   const [assignToLab, setAssignToLab] = useState(true);
   const [selectedLabId, setSelectedLabId] = useState<string>('');
   const [isAssignDialogOpen, setIsAssignDialogOpen] = useState(false);
+  const [confirmAssignLabOpen, setConfirmAssignLabOpen] = useState(false);
+  const [confirmPaymentLabOpen, setConfirmPaymentLabOpen] = useState(false);
+  const [paymentInsuranceData, setPaymentInsuranceData] = useState({
+    isInsured: false,
+    establishmentId: '',
+    coveragePercent: 0,
+    memberNumber: '',
+  });
+  const [paymentDiscountData, setPaymentDiscountData] = useState({
+    hasDiscount: false,
+    discountPercent: 0,
+  });
   const [assignLabId, setAssignLabId] = useState<string>('');
   const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
   const [detailRequest, setDetailRequest] = useState<any | null>(null);
@@ -104,7 +142,21 @@ const LabPaymentsPage: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [itemsPerPage] = useState(10);
+  const [dataRefreshKey, setDataRefreshKey] = useState(0);
+
+  // Charger les établissements d'assurance (pour le filtre Assureur)
+  useEffect(() => {
+    const loadEstablishments = async () => {
+      try {
+        const res = await getInsuranceEstablishments({ isActive: true });
+        if (res.success && res.data) setInsuranceEstablishments(Array.isArray(res.data) ? res.data : []);
+      } catch {
+        setInsuranceEstablishments([]);
+      }
+    };
+    loadEstablishments();
+  }, []);
 
   // Charger les utilisateurs de type "lab"
   useEffect(() => {
@@ -145,98 +197,43 @@ const LabPaymentsPage: React.FC = () => {
       try {
         setIsLoading(true);
         
-        // Charger les demandes labo et imagerie
-        const [labResponse, imagingResponse] = await Promise.all([
-          getReceptionLabPayments({
-            date: appliedDateFilter || undefined,
-            status: appliedStatusFilter !== 'all' ? appliedStatusFilter : undefined,
-            search: appliedSearch || undefined,
-            page: currentPage,
-            limit: itemsPerPage,
-          }),
-          getImagingRequests({
-            date: appliedDateFilter || undefined,
-            status: appliedStatusFilter !== 'all' ? appliedStatusFilter : undefined,
-            search: appliedSearch || undefined,
-            page: currentPage,
-            limit: itemsPerPage,
-          }),
-        ]);
+        // Charger les demandes labo et imagerie (API unique, pagination 10 par page)
+        const labResponse = await getReceptionLabPayments({
+          date: appliedDateFilter || undefined,
+          status: appliedStatusFilter !== 'all' ? appliedStatusFilter : undefined,
+          search: appliedSearch || undefined,
+          page: currentPage,
+          limit: 10,
+          type: 'all',
+          isInsured: appliedInsuranceFilter === 'yes' ? true : appliedInsuranceFilter === 'no' ? false : undefined,
+          hasDiscount: appliedDiscountFilter === 'yes' ? true : appliedDiscountFilter === 'no' ? false : undefined,
+          insuranceEstablishmentId: appliedInsuranceFilter === 'yes' && appliedEstablishmentFilter ? appliedEstablishmentFilter : undefined,
+        });
 
         let allRequests: any[] = [];
-
-        let labPagination: any = null;
-        let imagingPagination: any = null;
+        const pagination = labResponse?.data?.pagination;
 
         if (labResponse.success && labResponse.data) {
-          // Le backend peut retourner les données dans data.requests ou directement dans data
-          const labRequests = Array.isArray(labResponse.data) 
-            ? labResponse.data 
+          const requestsData = Array.isArray(labResponse.data)
+            ? labResponse.data
             : (labResponse.data.requests || labResponse.data || []);
-          console.log('LabPaymentsPage: Demandes labo reçues', labRequests);
-          console.log('LabPaymentsPage: Structure de labResponse.data', labResponse.data);
-          allRequests = [...allRequests, ...labRequests.map((r: any) => ({ ...r, type: 'lab' }))];
-          
-          // Extraire les informations de pagination
-          if (labResponse.data.pagination) {
-            labPagination = labResponse.data.pagination;
-          }
+          allRequests = requestsData.map((r: any) => (r.type ? r : { ...r, type: r.type || 'lab' }));
         }
 
-        if (imagingResponse.success && imagingResponse.data) {
-          const imagingRequests = Array.isArray(imagingResponse.data) 
-            ? imagingResponse.data 
-            : imagingResponse.data.requests || [];
-          console.log('LabPaymentsPage: Demandes imagerie reçues', imagingRequests);
-          allRequests = [...allRequests, ...imagingRequests.map((r: any) => ({ ...r, type: 'imaging' }))];
-          
-          // Extraire les informations de pagination
-          if (imagingResponse.data.pagination) {
-            imagingPagination = imagingResponse.data.pagination;
-          }
-        }
-
-        // Le filtrage par statut est déjà fait par le backend via les paramètres de requête
-        // On ne filtre plus côté frontend pour la réception, le backend gère déjà cela
-        // Si le backend retourne des données, on les affiche
-
-        console.log('LabPaymentsPage: Toutes les demandes avant affichage', allRequests);
         setRequests(allRequests);
 
-        // Mettre à jour la pagination (utiliser la pagination de lab si disponible, sinon celle d'imagerie)
-        // Si les deux réponses ont une pagination, on prend celle qui a le plus d'éléments
-        if (labPagination && imagingPagination) {
-          // Prendre la pagination avec le plus grand totalItems
-          const labTotal = labPagination.totalItems || 0;
-          const imagingTotal = imagingPagination.totalItems || 0;
-          if (labTotal >= imagingTotal) {
-            setTotalPages(labPagination.totalPages || 1);
-            setTotalItems(labPagination.totalItems || allRequests.length);
-            setItemsPerPage(labPagination.itemsPerPage || 10);
-          } else {
-            setTotalPages(imagingPagination.totalPages || 1);
-            setTotalItems(imagingPagination.totalItems || allRequests.length);
-            setItemsPerPage(imagingPagination.itemsPerPage || 10);
-          }
-        } else if (labPagination) {
-          setTotalPages(labPagination.totalPages || 1);
-          setTotalItems(labPagination.totalItems || allRequests.length);
-          setItemsPerPage(labPagination.itemsPerPage || 10);
-        } else if (imagingPagination) {
-          setTotalPages(imagingPagination.totalPages || 1);
-          setTotalItems(imagingPagination.totalItems || allRequests.length);
-          setItemsPerPage(imagingPagination.itemsPerPage || 10);
+        if (pagination) {
+          setTotalPages(pagination.totalPages || 1);
+          setTotalItems(pagination.totalItems || allRequests.length);
         } else {
-          // Si aucune pagination n'est fournie, calculer à partir des données
           setTotalPages(1);
           setTotalItems(allRequests.length);
-          setItemsPerPage(10);
         }
         
         console.log('LabPaymentsPage: Pagination mise à jour', {
-          totalPages: labPagination?.totalPages || imagingPagination?.totalPages || 1,
-          totalItems: labPagination?.totalItems || imagingPagination?.totalItems || allRequests.length,
-          itemsPerPage: labPagination?.itemsPerPage || imagingPagination?.itemsPerPage || 10,
+          totalPages: pagination?.totalPages || 1,
+          totalItems: pagination?.totalItems || allRequests.length,
+          itemsPerPage: 10,
         });
 
         // Calculer les statistiques
@@ -271,7 +268,7 @@ const LabPaymentsPage: React.FC = () => {
     };
 
     loadData();
-  }, [appliedSearch, appliedStatusFilter, appliedDateFilter, currentPage, itemsPerPage, user?.role]);
+  }, [appliedSearch, appliedStatusFilter, appliedDateFilter, appliedInsuranceFilter, appliedEstablishmentFilter, appliedDiscountFilter, currentPage, itemsPerPage, user?.role, dataRefreshKey]);
 
   // Get patient for a request (depuis les données de la requête)
   const getPatient = (request: any) => {
@@ -288,7 +285,10 @@ const LabPaymentsPage: React.FC = () => {
     setAppliedSearch(searchQuery);
     setAppliedStatusFilter(statusFilter);
     setAppliedDateFilter(dateFilter);
-    setCurrentPage(1); // Réinitialiser à la première page lors du filtrage
+    setAppliedInsuranceFilter(insuranceFilter);
+    setAppliedEstablishmentFilter(insuranceFilter === 'yes' ? establishmentFilter : '');
+    setAppliedDiscountFilter(discountFilter);
+    setCurrentPage(1);
   };
 
   // Handle page change
@@ -342,9 +342,15 @@ const LabPaymentsPage: React.FC = () => {
     setSearchQuery('');
     setStatusFilter('all');
     setDateFilter('');
+    setInsuranceFilter('all');
+    setEstablishmentFilter('');
+    setDiscountFilter('all');
     setAppliedSearch('');
     setAppliedStatusFilter('all');
     setAppliedDateFilter('');
+    setAppliedInsuranceFilter('all');
+    setAppliedEstablishmentFilter('');
+    setAppliedDiscountFilter('all');
   };
 
   // Export to Excel
@@ -354,6 +360,9 @@ const LabPaymentsPage: React.FC = () => {
         date: appliedDateFilter || undefined,
         status: appliedStatusFilter !== 'all' ? appliedStatusFilter : undefined,
         search: appliedSearch || undefined,
+        isInsured: appliedInsuranceFilter === 'yes' ? true : appliedInsuranceFilter === 'no' ? false : undefined,
+        hasDiscount: appliedDiscountFilter === 'yes' ? true : appliedDiscountFilter === 'no' ? false : undefined,
+        insuranceEstablishmentId: appliedInsuranceFilter === 'yes' && appliedEstablishmentFilter ? appliedEstablishmentFilter : undefined,
       });
       
       const url = window.URL.createObjectURL(blob);
@@ -379,6 +388,12 @@ const LabPaymentsPage: React.FC = () => {
   // Handle payment and assignment
   const handlePayment = async () => {
     if (!selectedRequest) return;
+    if (paymentInsuranceData.isInsured && !paymentInsuranceData.memberNumber?.trim()) {
+      toast.error('Numéro identifiant assureur requis', {
+        description: 'Veuillez saisir le numéro d\'identifiant chez l\'assureur lorsque l\'assurance est activée.',
+      });
+      return;
+    }
 
     try {
       await payLabRequest(selectedRequest.id, {
@@ -386,7 +401,19 @@ const LabPaymentsPage: React.FC = () => {
         reference: paymentReference || undefined,
         assignToLab: assignToLab,
         labTechnicianId: assignToLab ? selectedLabId : undefined,
-        type: selectedRequest.type || 'lab', // Inclure le type (lab ou imaging)
+        type: selectedRequest.type || 'lab',
+        insurance: paymentInsuranceData.isInsured
+          ? {
+              isInsured: true,
+              establishmentId: paymentInsuranceData.establishmentId || undefined,
+              coveragePercent: paymentInsuranceData.coveragePercent,
+              memberNumber: paymentInsuranceData.memberNumber?.trim() || undefined,
+            }
+          : { isInsured: false },
+        discount: {
+          hasDiscount: paymentDiscountData.hasDiscount,
+          discountPercent: paymentDiscountData.hasDiscount ? paymentDiscountData.discountPercent : 0,
+        },
       });
 
       if (assignToLab) {
@@ -399,11 +426,15 @@ const LabPaymentsPage: React.FC = () => {
       setIsPaymentDialogOpen(false);
       setSelectedRequest(null);
       setPaymentReference('');
+      setConfirmPaymentLabOpen(false);
       setAssignToLab(true);
       // Réinitialiser avec le premier utilisateur lab si disponible
       if (labUsers.length > 0) {
         setSelectedLabId(labUsers[0].id);
       }
+      
+      // Forcer le rechargement des données (statut mis à jour)
+      setDataRefreshKey((k) => k + 1);
       
       // Recharger les données
       setAppliedSearch('');
@@ -427,11 +458,42 @@ const LabPaymentsPage: React.FC = () => {
     setPaymentMethod('cash');
     setPaymentReference('');
     setAssignToLab(true);
-    // Utiliser le premier utilisateur lab comme sélection par défaut
+    const patient = request?.patient || {};
+    setPaymentInsuranceData({
+      isInsured: !!patient.isInsured,
+      establishmentId: patient.insuranceEstablishmentId || patient.insuranceEstablishment?.id || '',
+      coveragePercent: patient.insuranceCoveragePercent ?? 0,
+      memberNumber: patient.insuranceMemberNumber || '',
+    });
+    setPaymentDiscountData({
+      hasDiscount: !!(patient.hasDiscount && (patient.discountPercent ?? 0) > 0),
+      discountPercent: patient.discountPercent ?? 0,
+    });
     if (labUsers.length > 0) {
       setSelectedLabId(labUsers[0].id);
     }
   };
+
+  // Calcul montant avec assurance et remise (modal paiement labo/imagerie)
+  const paymentAmountBreakdown = useMemo(() => {
+    if (!selectedRequest) return { baseAmount: 0, insuranceDeduction: 0, discountDeduction: 0, totalAmount: 0 };
+    const base = typeof selectedRequest.totalAmount === 'string'
+      ? parseFloat(selectedRequest.totalAmount)
+      : Number(selectedRequest.totalAmount) || 0;
+    const insDed = paymentInsuranceData.isInsured && paymentInsuranceData.coveragePercent > 0
+      ? base * (paymentInsuranceData.coveragePercent / 100)
+      : 0;
+    const afterInsurance = base - insDed;
+    const discDed = paymentDiscountData.hasDiscount && paymentDiscountData.discountPercent > 0
+      ? afterInsurance * (paymentDiscountData.discountPercent / 100)
+      : 0;
+    return {
+      baseAmount: base,
+      insuranceDeduction: insDed,
+      discountDeduction: discDed,
+      totalAmount: Math.max(0, afterInsurance - discDed),
+    };
+  }, [selectedRequest, paymentInsuranceData, paymentDiscountData]);
 
   return (
     <div className="space-y-6">
@@ -510,12 +572,52 @@ const LabPaymentsPage: React.FC = () => {
                 <CalendarIcon className="h-4 w-4" />
                 Date
               </Label>
-              <Input
-                id="date-filter"
-                type="date"
-                value={dateFilter}
-                onChange={(e) => setDateFilter(e.target.value)}
-              />
+              <div className="flex gap-2">
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      id="date-filter"
+                      variant="outline"
+                      className={cn(
+                        "w-full justify-start text-left font-normal",
+                        !dateFilter && "text-muted-foreground"
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {dateFilter ? (
+                        new Date(dateFilter).toLocaleDateString('fr-FR')
+                      ) : (
+                        <span>Tous les paiements</span>
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <CalendarComponent
+                      mode="single"
+                      selected={dateFilter ? new Date(dateFilter) : undefined}
+                      onSelect={(date) => {
+                        if (date) {
+                          setDateFilter(date.toISOString().split('T')[0]);
+                        } else {
+                          setDateFilter('');
+                        }
+                      }}
+                      disabled={(date) => date > new Date()}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
+                {dateFilter && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setDateFilter('')}
+                    className="whitespace-nowrap"
+                  >
+                    Tous
+                  </Button>
+                )}
+              </div>
             </div>
 
             {/* Status Filter */}
@@ -532,6 +634,60 @@ const LabPaymentsPage: React.FC = () => {
                   <SelectItem value="all">Tous</SelectItem>
                   <SelectItem value="pending">En attente</SelectItem>
                   <SelectItem value="paid">Payé</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Assurance Filter */}
+            <div className="space-y-2">
+              <Label htmlFor="insurance-filter" className="flex items-center gap-2">
+                <Shield className="h-4 w-4" />
+                Assurance
+              </Label>
+              <Select value={insuranceFilter} onValueChange={(v: any) => { setInsuranceFilter(v); if (v !== 'yes') setEstablishmentFilter(''); }}>
+                <SelectTrigger id="insurance-filter">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Tous</SelectItem>
+                  <SelectItem value="yes">Assurés</SelectItem>
+                  <SelectItem value="no">Non assurés</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Assureur (visible quand Assurance = Assurés) */}
+            {insuranceFilter === 'yes' && (
+              <div className="space-y-2">
+                <Label htmlFor="establishment-filter">Assureur</Label>
+                <Select value={establishmentFilter || 'all'} onValueChange={(v) => setEstablishmentFilter(v === 'all' ? '' : v)}>
+                  <SelectTrigger id="establishment-filter">
+                    <SelectValue placeholder="Tous les assureurs" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Tous les assureurs</SelectItem>
+                    {insuranceEstablishments.map((e) => (
+                      <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {/* Remise Filter */}
+            <div className="space-y-2">
+              <Label htmlFor="discount-filter" className="flex items-center gap-2">
+                <Percent className="h-4 w-4" />
+                Remise
+              </Label>
+              <Select value={discountFilter} onValueChange={(v: any) => setDiscountFilter(v)}>
+                <SelectTrigger id="discount-filter">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Tous</SelectItem>
+                  <SelectItem value="yes">Avec remise</SelectItem>
+                  <SelectItem value="no">Sans remise</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -552,7 +708,7 @@ const LabPaymentsPage: React.FC = () => {
             <Button
               variant="outline"
               onClick={handleResetFilters}
-              disabled={!appliedSearch && appliedStatusFilter === 'all' && !appliedDateFilter}
+              disabled={!appliedSearch && appliedStatusFilter === 'all' && !appliedDateFilter && appliedInsuranceFilter === 'all' && !appliedEstablishmentFilter && appliedDiscountFilter === 'all'}
             >
               <RotateCcw className="h-4 w-4 mr-2" />
               Réinitialiser
@@ -591,31 +747,48 @@ const LabPaymentsPage: React.FC = () => {
                 <TableRow>
                   <TableHead>Patient</TableHead>
                   <TableHead>ID Vitalis</TableHead>
+                  <TableHead>Assurance</TableHead>
+                  <TableHead>Remise</TableHead>
                   <TableHead>N° Demande</TableHead>
                   <TableHead>Médecin</TableHead>
-                  <TableHead>Montant</TableHead>
+                  <TableHead className="text-right">Montant de base</TableHead>
+                  <TableHead className="text-right">Déduction assurance</TableHead>
+                  <TableHead className="text-right">Déduction remise</TableHead>
+                  <TableHead className="text-right">Montant payé</TableHead>
                   <TableHead>Statut</TableHead>
-                  <TableHead>Date</TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {requests.map((request, index) => {
+                {requests.map((request) => {
+                  const amountBase = request.amountBase ?? request.payment?.amountBase ?? request.totalAmount;
+                  const insuranceDed = request.insuranceDeduction ?? request.payment?.insuranceDeduction;
+                  const discountDed = request.discountDeduction ?? request.payment?.discountDeduction;
+                  const amountPaid = request.amount ?? request.payment?.amount ?? request.totalAmount;
                   const patient = getPatient(request);
                   const doctor = getDoctor(request);
                   const isPending = request.status === 'pending';
-                  const isFirstRow = index === 0;
+                  // Assurance / remise du dossier (demande), pas du profil patient
+                  const baseNum = amountBase != null ? Number(amountBase) : 0;
+                  const paymentForRow = baseNum > 0 ? {
+                    coveragePercent: insuranceDed != null && Number(insuranceDed) !== 0
+                      ? Math.round((Number(insuranceDed) / baseNum) * 100)
+                      : null,
+                    discountPercent: discountDed != null && Number(discountDed) !== 0
+                      ? Math.round((Number(discountDed) / baseNum) * 100)
+                      : null,
+                  } : null;
+                  const patientWithPayment = paymentForRow
+                    ? { ...patient, payment: paymentForRow }
+                    : patient;
 
                   return (
                     <TableRow key={request.id}>
                       <TableCell>
                         {patient.firstName ? (
-                          <div>
-                            <p className="font-medium">
-                              {patient.firstName} {patient.lastName}
-                            </p>
-                            <p className="text-sm text-muted-foreground">{patient.phone}</p>
-                          </div>
+                          <p className="font-medium">
+                            {patient.firstName} {patient.lastName}
+                          </p>
                         ) : (
                           <span className="text-sm text-muted-foreground">Patient inconnu</span>
                         )}
@@ -628,6 +801,12 @@ const LabPaymentsPage: React.FC = () => {
                         ) : (
                           <span className="text-sm text-muted-foreground">-</span>
                         )}
+                      </TableCell>
+                      <TableCell>
+                        <PatientInsuranceDiscount patient={patientWithPayment} column="assurance" usePaymentPercent />
+                      </TableCell>
+                      <TableCell>
+                        <PatientInsuranceDiscount patient={patientWithPayment} column="remise" usePaymentPercent />
                       </TableCell>
                       <TableCell>
                         <Badge variant="outline" className="font-mono">
@@ -649,14 +828,24 @@ const LabPaymentsPage: React.FC = () => {
                           <span className="text-sm text-muted-foreground">-</span>
                         )}
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="text-right text-muted-foreground">
+                        {amountBase != null && amountBase !== ''
+                          ? (typeof amountBase === 'string' ? parseFloat(amountBase) : amountBase).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + ' GNF'
+                          : '—'}
+                      </TableCell>
+                      <TableCell className="text-right text-muted-foreground">
+                        {(insuranceDed != null && Number(insuranceDed) !== 0)
+                          ? Number(insuranceDed).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + ' GNF'
+                          : '—'}
+                      </TableCell>
+                      <TableCell className="text-right text-muted-foreground">
+                        {(discountDed != null && Number(discountDed) !== 0)
+                          ? Number(discountDed).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + ' GNF'
+                          : '—'}
+                      </TableCell>
+                      <TableCell className="text-right">
                         <p className="font-semibold text-success">
-                          {(() => {
-                            const amount = typeof request.totalAmount === 'string' 
-                              ? parseFloat(request.totalAmount) 
-                              : (request.totalAmount || 0);
-                            return amount.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                          })()} GNF
+                          {(amountPaid != null ? (typeof amountPaid === 'string' ? parseFloat(amountPaid) : amountPaid) : 0).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} GNF
                         </p>
                       </TableCell>
                       <TableCell>
@@ -668,21 +857,6 @@ const LabPaymentsPage: React.FC = () => {
                             ? 'pending'
                             : request.paymentStatus || request.requestStatus || request.status || 'pending'
                         } />
-                      </TableCell>
-                      <TableCell>
-                        {!isFirstRow ? (
-                          <div className="flex items-center gap-2 text-sm">
-                            <CalendarIcon className="h-4 w-4 text-muted-foreground" />
-                            <span>
-                              {new Date(request.createdAt).toLocaleDateString('fr-FR', {
-                                day: '2-digit',
-                                month: 'short',
-                              })}
-                            </span>
-                          </div>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
@@ -725,8 +899,7 @@ const LabPaymentsPage: React.FC = () => {
               <div className="text-sm text-muted-foreground">
                 Affichage de {((currentPage - 1) * itemsPerPage) + 1} à {Math.min(currentPage * itemsPerPage, totalItems)} sur {totalItems} demande(s)
               </div>
-              {totalPages > 1 && (
-                <Pagination>
+              <Pagination>
                   <PaginationContent>
                     <PaginationItem>
                       <PaginationPrevious
@@ -769,7 +942,6 @@ const LabPaymentsPage: React.FC = () => {
                     </PaginationItem>
                   </PaginationContent>
                 </Pagination>
-              )}
             </div>
           )}
         </CardContent>
@@ -777,7 +949,7 @@ const LabPaymentsPage: React.FC = () => {
 
       {/* Payment Dialog */}
       <Dialog open={isPaymentDialogOpen} onOpenChange={setIsPaymentDialogOpen}>
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent className="sm:max-w-[540px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Enregistrer le paiement</DialogTitle>
             <DialogDescription>
@@ -786,18 +958,129 @@ const LabPaymentsPage: React.FC = () => {
                   Patient: {getPatient(selectedRequest).firstName}{' '}
                   {getPatient(selectedRequest).lastName}
                   <br />
-                  Montant: <strong>{(() => {
-                    const amount = typeof selectedRequest.totalAmount === 'string' 
-                      ? parseFloat(selectedRequest.totalAmount) 
-                      : (selectedRequest.totalAmount || 0);
-                    return amount.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                  })()} GNF</strong>
+                  Montant de base: <strong>{paymentAmountBreakdown.baseAmount.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} GNF</strong>
+                  {paymentAmountBreakdown.insuranceDeduction > 0 && (
+                    <> — Déduction assurance: -{paymentAmountBreakdown.insuranceDeduction.toLocaleString('fr-FR')} GNF</>
+                  )}
+                  {paymentAmountBreakdown.discountDeduction > 0 && (
+                    <> — Remise: -{paymentAmountBreakdown.discountDeduction.toLocaleString('fr-FR')} GNF</>
+                  )}
+                  <br />
+                  <strong>Total à payer: {paymentAmountBreakdown.totalAmount.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} GNF</strong>
                 </>
               )}
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-4">
+            {/* Assurance */}
+            <div className="space-y-4 rounded-lg border p-4 bg-card">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <ShieldCheck className="h-5 w-5 text-primary" />
+                  <span className="font-medium">Patient assuré</span>
+                </div>
+                <Switch
+                  checked={paymentInsuranceData.isInsured}
+                  onCheckedChange={(checked) =>
+                    setPaymentInsuranceData((prev) => ({
+                      ...prev,
+                      isInsured: checked,
+                      establishmentId: checked ? prev.establishmentId : '',
+                      coveragePercent: checked ? prev.coveragePercent : 0,
+                      memberNumber: checked ? prev.memberNumber : '',
+                    }))
+                  }
+                />
+              </div>
+              {paymentInsuranceData.isInsured && (
+                <div className="space-y-4 pt-2 border-t">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Établissement d'assurance</Label>
+                      <Select
+                        value={paymentInsuranceData.establishmentId}
+                        onValueChange={(value) =>
+                          setPaymentInsuranceData((prev) => ({ ...prev, establishmentId: value }))
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Choisir l'établissement" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {insuranceEstablishments.map((est) => (
+                            <SelectItem key={est.id} value={est.id}>
+                              {est.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Couverture (%)</Label>
+                      <Input
+                        type="number"
+                        min={0}
+                        max={100}
+                        placeholder="Ex: 80"
+                        value={paymentInsuranceData.coveragePercent || ''}
+                        onChange={(e) => {
+                          const v = e.target.value === '' ? 0 : Math.min(100, Math.max(0, Number(e.target.value)));
+                          setPaymentInsuranceData((prev) => ({ ...prev, coveragePercent: v }));
+                        }}
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>N° identifiant assureur <span className="text-destructive">*</span></Label>
+                    <Input
+                      placeholder="Ex. numéro de contrat, matricule..."
+                      value={paymentInsuranceData.memberNumber}
+                      onChange={(e) =>
+                        setPaymentInsuranceData((prev) => ({ ...prev, memberNumber: e.target.value }))
+                      }
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Remise */}
+            <div className="space-y-4 rounded-lg border p-4 bg-card">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Percent className="h-5 w-5 text-primary" />
+                  <span className="font-medium">Bénéficie d'une remise</span>
+                </div>
+                <Switch
+                  checked={paymentDiscountData.hasDiscount}
+                  onCheckedChange={(checked) =>
+                    setPaymentDiscountData((prev) => ({
+                      ...prev,
+                      hasDiscount: checked,
+                      discountPercent: checked ? prev.discountPercent : 0,
+                    }))
+                  }
+                />
+              </div>
+              {paymentDiscountData.hasDiscount && (
+                <div className="pt-2 border-t space-y-2">
+                  <Label>Pourcentage de remise (%)</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={100}
+                    placeholder="Ex: 10"
+                    value={paymentDiscountData.discountPercent || ''}
+                    onChange={(e) => {
+                      const v = e.target.value === '' ? 0 : Math.min(100, Math.max(0, Number(e.target.value)));
+                      setPaymentDiscountData((prev) => ({ ...prev, discountPercent: v }));
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+
             {/* Payment Method */}
             <div className="space-y-3">
               <Label>Mode de paiement</Label>
@@ -909,11 +1192,64 @@ const LabPaymentsPage: React.FC = () => {
             <Button variant="outline" onClick={() => setIsPaymentDialogOpen(false)}>
               Annuler
             </Button>
-            <Button onClick={handlePayment} className="gap-2">
+                <Button
+                  onClick={() => {
+                    if (paymentInsuranceData.isInsured && !paymentInsuranceData.memberNumber?.trim()) {
+                      toast.error('Numéro identifiant assureur requis', {
+                        description: 'Veuillez saisir le numéro d\'identifiant chez l\'assureur lorsque l\'assurance est activée.',
+                      });
+                      return;
+                    }
+                    setConfirmPaymentLabOpen(true);
+                  }}
+                  className="gap-2"
+                >
               <CheckCircle2 className="h-4 w-4" />
               {assignToLab ? 'Encaisser et assigner' : 'Encaisser'}
             </Button>
           </DialogFooter>
+
+          {/* Confirmation encaissement paiement labo */}
+          <AlertDialog open={confirmPaymentLabOpen} onOpenChange={setConfirmPaymentLabOpen}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Confirmer l'encaissement</AlertDialogTitle>
+                <AlertDialogDescription>
+                  {selectedRequest && (
+                    <>
+                      Êtes-vous sûr de vouloir enregistrer le paiement de la demande{' '}
+                      <strong>{selectedRequest.id}</strong> —{' '}
+                      <strong>{paymentAmountBreakdown.totalAmount.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} GNF</strong> par{' '}
+                      <strong>{paymentMethod === 'cash' ? 'Espèces' : 'Orange Money'}</strong>
+                      {paymentInsuranceData.isInsured && ` (assurance ${paymentInsuranceData.coveragePercent}%)`}
+                      {paymentDiscountData.hasDiscount && ` (remise ${paymentDiscountData.discountPercent}%)`} ?
+                      {assignToLab && (
+                        <>
+                          <br /><br />
+                          La demande sera également assignée au laboratoire{' '}
+                          <strong>{labUsers.find(l => l.id === selectedLabId)?.name || 'sélectionné'}</strong>.
+                        </>
+                      )}
+                    </>
+                  )}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Annuler</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setConfirmPaymentLabOpen(false);
+                    handlePayment();
+                  }}
+                  className="gap-2"
+                >
+                  <CheckCircle2 className="h-4 w-4" />
+                  {assignToLab ? 'Encaisser et assigner' : 'Encaisser'}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </DialogContent>
       </Dialog>
 
@@ -1212,22 +1548,54 @@ const LabPaymentsPage: React.FC = () => {
               Annuler
             </Button>
             <Button
-              onClick={() => {
-                const selectedLab = labUsers.find(lab => lab.id === assignLabId);
-                toast.success(`Demande assignée à ${selectedLab?.name || 'le laboratoire'}`);
-                setIsAssignDialogOpen(false);
-                setSelectedRequest(null);
-                // Réinitialiser avec le premier utilisateur lab si disponible
-                if (labUsers.length > 0) {
-                  setAssignLabId(labUsers[0].id);
-                }
-              }}
+              onClick={() => setConfirmAssignLabOpen(true)}
               className="gap-2"
             >
               <UserCheck className="h-4 w-4" />
               Confirmer l'assignation
             </Button>
           </DialogFooter>
+
+          {/* Confirmation assignation labo */}
+          <AlertDialog open={confirmAssignLabOpen} onOpenChange={setConfirmAssignLabOpen}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Confirmer l'assignation</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Êtes-vous sûr de vouloir assigner cette demande au laboratoire{' '}
+                  <strong>{labUsers.find(lab => lab.id === assignLabId)?.name || 'sélectionné'}</strong> ?
+                  {selectedRequest && (
+                    <>
+                      <br /><br />
+                      Patient: {getPatient(selectedRequest).firstName} {getPatient(selectedRequest).lastName}
+                      <br />
+                      N° Demande: <strong>{selectedRequest.id}</strong>
+                    </>
+                  )}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Annuler</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setConfirmAssignLabOpen(false);
+                    const selectedLab = labUsers.find(lab => lab.id === assignLabId);
+                    toast.success(`Demande assignée à ${selectedLab?.name || 'le laboratoire'}`);
+                    setIsAssignDialogOpen(false);
+                    setSelectedRequest(null);
+                    if (labUsers.length > 0) {
+                      setAssignLabId(labUsers[0].id);
+                    }
+                  }}
+                  className="gap-2"
+                >
+                  <UserCheck className="h-4 w-4" />
+                  Confirmer l'assignation
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </DialogContent>
       </Dialog>
     </div>

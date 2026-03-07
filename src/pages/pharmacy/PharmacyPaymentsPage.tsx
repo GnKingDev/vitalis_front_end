@@ -34,6 +34,10 @@ import {
   Plus,
   X,
   Package,
+  Download,
+  Shield,
+  ShieldCheck,
+  Percent,
 } from 'lucide-react';
 import {
   Select,
@@ -49,13 +53,20 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar as CalendarComponent } from '@/components/ui/calendar';
+import { cn } from '@/lib/utils';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import type { Payment, PaymentMethod, PaymentStatus, PharmacyProduct } from '@/types';
-import { getPharmacyPayments, getPharmacyProducts, createPharmacyPayment } from '@/services/api/pharmacyService';
+import { getPharmacyPayments, getPharmacyProducts, createPharmacyPayment, exportPharmacyPayments } from '@/services/api/pharmacyService';
+import { getInsuranceEstablishments } from '@/services/api/insuranceEstablishmentsService';
+import type { InsuranceEstablishment } from '@/services/api/insuranceEstablishmentsService';
 import { getPatients } from '@/services/api/patientsService';
+import { PatientInsuranceDiscount } from '@/components/shared/PatientInsuranceDiscount';
 
 interface SelectedProduct {
   product: PharmacyProduct;
@@ -67,9 +78,16 @@ const PharmacyPaymentsPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<PaymentStatus | 'all'>('all');
   const [dateFilter, setDateFilter] = useState('');
+  const [insuranceFilter, setInsuranceFilter] = useState<'all' | 'yes' | 'no'>('all');
+  const [establishmentFilter, setEstablishmentFilter] = useState<string>('');
+  const [discountFilter, setDiscountFilter] = useState<'all' | 'yes' | 'no'>('all');
   const [appliedSearch, setAppliedSearch] = useState('');
   const [appliedStatus, setAppliedStatus] = useState<PaymentStatus | 'all'>('all');
   const [appliedDate, setAppliedDate] = useState('');
+  const [appliedInsuranceFilter, setAppliedInsuranceFilter] = useState<'all' | 'yes' | 'no'>('all');
+  const [appliedEstablishmentFilter, setAppliedEstablishmentFilter] = useState<string>('');
+  const [appliedDiscountFilter, setAppliedDiscountFilter] = useState<'all' | 'yes' | 'no'>('all');
+  const [insuranceEstablishments, setInsuranceEstablishments] = useState<InsuranceEstablishment[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [payments, setPayments] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -86,8 +104,52 @@ const PharmacyPaymentsPage: React.FC = () => {
   const [reference, setReference] = useState('');
   const [availableProducts, setAvailableProducts] = useState<PharmacyProduct[]>([]);
   const [isCreatingPayment, setIsCreatingPayment] = useState(false);
-  
+  const [paymentInsuranceData, setPaymentInsuranceData] = useState({
+    isInsured: false,
+    establishmentId: '',
+    coveragePercent: 0,
+    memberNumber: '',
+  });
+  const [paymentDiscountData, setPaymentDiscountData] = useState({
+    hasDiscount: false,
+    discountPercent: 0,
+  });
+
   const itemsPerPage = 10;
+
+  // Pré-remplir assurance/remise depuis le patient quand il est sélectionné
+  useEffect(() => {
+    if (!patientInfo || !isCreateDialogOpen) return;
+    const p = patientInfo as any;
+    if (p.isInsured && p.insuranceEstablishmentId) {
+      setPaymentInsuranceData((prev) => ({
+        ...prev,
+        isInsured: true,
+        establishmentId: p.insuranceEstablishmentId || prev.establishmentId,
+        coveragePercent: p.insuranceCoveragePercent ?? prev.coveragePercent,
+      }));
+    }
+    if (p.hasDiscount && p.discountPercent != null) {
+      setPaymentDiscountData((prev) => ({
+        ...prev,
+        hasDiscount: true,
+        discountPercent: p.discountPercent ?? prev.discountPercent,
+      }));
+    }
+  }, [patientInfo?.id, isCreateDialogOpen]);
+
+  // Charger les établissements d'assurance (pour le filtre Assureur)
+  useEffect(() => {
+    const loadEstablishments = async () => {
+      try {
+        const res = await getInsuranceEstablishments({ isActive: true });
+        if (res.success && res.data) setInsuranceEstablishments(Array.isArray(res.data) ? res.data : []);
+      } catch {
+        setInsuranceEstablishments([]);
+      }
+    };
+    loadEstablishments();
+  }, []);
 
   // Charger les paiements depuis l'API
   useEffect(() => {
@@ -100,6 +162,9 @@ const PharmacyPaymentsPage: React.FC = () => {
           date: appliedDate || undefined,
           status: appliedStatus !== 'all' ? appliedStatus : undefined,
           search: appliedSearch || undefined,
+          isInsured: appliedInsuranceFilter === 'yes' ? true : appliedInsuranceFilter === 'no' ? false : undefined,
+          hasDiscount: appliedDiscountFilter === 'yes' ? true : appliedDiscountFilter === 'no' ? false : undefined,
+          insuranceEstablishmentId: appliedInsuranceFilter === 'yes' && appliedEstablishmentFilter ? appliedEstablishmentFilter : undefined,
         });
 
         if (response.success && response.data) {
@@ -127,7 +192,7 @@ const PharmacyPaymentsPage: React.FC = () => {
     };
 
     loadPayments();
-  }, [currentPage, appliedSearch, appliedStatus, appliedDate]);
+  }, [currentPage, appliedSearch, appliedStatus, appliedDate, appliedInsuranceFilter, appliedEstablishmentFilter, appliedDiscountFilter]);
 
   // Charger les produits disponibles pour la création de paiement
   useEffect(() => {
@@ -190,6 +255,9 @@ const PharmacyPaymentsPage: React.FC = () => {
     setAppliedDate(dateFilter);
     setAppliedStatus(statusFilter);
     setAppliedSearch(searchQuery);
+    setAppliedInsuranceFilter(insuranceFilter);
+    setAppliedEstablishmentFilter(insuranceFilter === 'yes' ? establishmentFilter : '');
+    setAppliedDiscountFilter(discountFilter);
     setCurrentPage(1);
   };
 
@@ -198,10 +266,42 @@ const PharmacyPaymentsPage: React.FC = () => {
     setDateFilter('');
     setStatusFilter('all');
     setSearchQuery('');
+    setInsuranceFilter('all');
+    setEstablishmentFilter('');
+    setDiscountFilter('all');
     setAppliedDate('');
     setAppliedStatus('all');
     setAppliedSearch('');
+    setAppliedInsuranceFilter('all');
+    setAppliedEstablishmentFilter('');
+    setAppliedDiscountFilter('all');
     setCurrentPage(1);
+  };
+
+  // Exporter en Excel
+  const handleExportExcel = async () => {
+    try {
+      const blob = await exportPharmacyPayments({
+        date: appliedDate || undefined,
+        status: appliedStatus !== 'all' ? appliedStatus : undefined,
+        search: appliedSearch || undefined,
+        isInsured: appliedInsuranceFilter === 'yes' ? true : appliedInsuranceFilter === 'no' ? false : undefined,
+        hasDiscount: appliedDiscountFilter === 'yes' ? true : appliedDiscountFilter === 'no' ? false : undefined,
+        insuranceEstablishmentId: appliedInsuranceFilter === 'yes' && appliedEstablishmentFilter ? appliedEstablishmentFilter : undefined,
+      });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `paiements_pharmacie_${appliedDate || 'all'}_${new Date().toISOString().split('T')[0]}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      a.remove();
+      toast.success('Export réussi', { description: 'Le fichier Excel a été téléchargé' });
+    } catch (error: any) {
+      console.error('Erreur lors de l\'export:', error);
+      toast.error('Erreur', { description: error?.message || 'Impossible d\'exporter les paiements' });
+    }
   };
 
   // Gérer la touche Entrée pour la recherche
@@ -311,12 +411,27 @@ const PharmacyPaymentsPage: React.FC = () => {
     );
   }, [productSearch, availableProducts]);
 
-  // Calculate total amount
+  // Calculate total amount (base) and final amount (after assurance + remise)
   const totalAmount = useMemo(() => {
     return selectedProducts.reduce((sum, item) => {
       return sum + (item.product.price * item.quantity);
     }, 0);
   }, [selectedProducts]);
+
+  const { finalAmount, insuranceDeduction, discountDeduction } = useMemo(() => {
+    const base = totalAmount;
+    const insPercent = paymentInsuranceData.isInsured ? (paymentInsuranceData.coveragePercent || 0) : 0;
+    const discPercent = paymentDiscountData.hasDiscount ? (paymentDiscountData.discountPercent || 0) : 0;
+    const insDed = base * (insPercent / 100);
+    const afterIns = base - insDed;
+    const discDed = afterIns * (discPercent / 100);
+    const final = Math.max(0, Math.round((afterIns - discDed) * 100) / 100);
+    return {
+      finalAmount: final,
+      insuranceDeduction: insDed,
+      discountDeduction: discDed,
+    };
+  }, [totalAmount, paymentInsuranceData.isInsured, paymentInsuranceData.coveragePercent, paymentDiscountData.hasDiscount, paymentDiscountData.discountPercent]);
 
   // Add product to selection
   const handleAddProduct = (product: PharmacyProduct) => {
@@ -363,6 +478,13 @@ const PharmacyPaymentsPage: React.FC = () => {
       return;
     }
 
+    if (paymentInsuranceData.isInsured && !paymentInsuranceData.memberNumber?.trim()) {
+      toast.error('Numéro identifiant assureur requis', {
+        description: "Veuillez saisir le numéro d'identifiant chez l'assureur.",
+      });
+      return;
+    }
+
     try {
       setIsCreatingPayment(true);
 
@@ -374,6 +496,16 @@ const PharmacyPaymentsPage: React.FC = () => {
         })),
         method: paymentMethod,
         reference: paymentMethod === 'orange_money' ? reference : undefined,
+        insurance: {
+          isInsured: paymentInsuranceData.isInsured,
+          establishmentId: paymentInsuranceData.isInsured ? paymentInsuranceData.establishmentId || undefined : undefined,
+          coveragePercent: paymentInsuranceData.isInsured ? (paymentInsuranceData.coveragePercent || 0) : undefined,
+          memberNumber: paymentInsuranceData.isInsured ? paymentInsuranceData.memberNumber?.trim() : undefined,
+        },
+        discount: {
+          hasDiscount: paymentDiscountData.hasDiscount,
+          discountPercent: paymentDiscountData.hasDiscount ? (paymentDiscountData.discountPercent || 0) : 0,
+        },
       };
 
       const response = await createPharmacyPayment(paymentData);
@@ -420,6 +552,8 @@ const PharmacyPaymentsPage: React.FC = () => {
         setPaymentMethod('cash');
         setReference('');
         setProductSearch('');
+        setPaymentInsuranceData({ isInsured: false, establishmentId: '', coveragePercent: 0, memberNumber: '' });
+        setPaymentDiscountData({ hasDiscount: false, discountPercent: 0 });
         setIsCreateDialogOpen(false);
       } else {
         toast.error('Erreur', {
@@ -574,15 +708,143 @@ const PharmacyPaymentsPage: React.FC = () => {
 
               {/* Total Amount */}
               {selectedProducts.length > 0 && (
-                <div className="p-4 bg-primary/5 rounded-lg border border-primary/20">
+                <div className="p-4 bg-primary/5 rounded-lg border border-primary/20 space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-lg font-semibold">Montant total</span>
+                    <span className="text-muted-foreground">Montant de base</span>
+                    <span>{totalAmount.toLocaleString()} GNF</span>
+                  </div>
+                  {(insuranceDeduction > 0 || discountDeduction > 0) && (
+                    <>
+                      {insuranceDeduction > 0 && (
+                        <div className="flex items-center justify-between text-sm text-muted-foreground">
+                          <span>Déduction assurance</span>
+                          <span>-{insuranceDeduction.toLocaleString()} GNF</span>
+                        </div>
+                      )}
+                      {discountDeduction > 0 && (
+                        <div className="flex items-center justify-between text-sm text-muted-foreground">
+                          <span>Déduction remise</span>
+                          <span>-{discountDeduction.toLocaleString()} GNF</span>
+                        </div>
+                      )}
+                    </>
+                  )}
+                  <div className="flex items-center justify-between pt-2 border-t">
+                    <span className="text-lg font-semibold">Montant à payer</span>
                     <span className="text-2xl font-bold text-primary">
-                      {totalAmount.toLocaleString()} GNF
+                      {finalAmount.toLocaleString()} GNF
                     </span>
                   </div>
                 </div>
               )}
+
+              {/* Assurance - toujours visible */}
+              <div className="space-y-4 rounded-lg border p-4 bg-card">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <ShieldCheck className="h-5 w-5 text-primary" />
+                      <span className="font-medium">Patient assuré</span>
+                    </div>
+                    <Switch
+                      checked={paymentInsuranceData.isInsured}
+                      onCheckedChange={(checked) =>
+                        setPaymentInsuranceData((prev) => ({
+                          ...prev,
+                          isInsured: checked,
+                          establishmentId: checked ? prev.establishmentId : '',
+                          coveragePercent: checked ? prev.coveragePercent : 0,
+                          memberNumber: checked ? prev.memberNumber : '',
+                        }))
+                      }
+                    />
+                  </div>
+                  {paymentInsuranceData.isInsured && (
+                    <div className="space-y-4 pt-2 border-t">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label>Établissement d'assurance</Label>
+                          <Select
+                            value={paymentInsuranceData.establishmentId}
+                            onValueChange={(value) =>
+                              setPaymentInsuranceData((prev) => ({ ...prev, establishmentId: value }))
+                            }
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Choisir l'établissement" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {insuranceEstablishments.map((est) => (
+                                <SelectItem key={est.id} value={est.id}>
+                                  {est.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Couverture (%)</Label>
+                          <Input
+                            type="number"
+                            min={0}
+                            max={100}
+                            placeholder="Ex: 80"
+                            value={paymentInsuranceData.coveragePercent || ''}
+                            onChange={(e) => {
+                              const v = e.target.value === '' ? 0 : Math.min(100, Math.max(0, Number(e.target.value)));
+                              setPaymentInsuranceData((prev) => ({ ...prev, coveragePercent: v }));
+                            }}
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>N° identifiant assureur <span className="text-destructive">*</span></Label>
+                        <Input
+                          placeholder="Ex. numéro de contrat, matricule..."
+                          value={paymentInsuranceData.memberNumber}
+                          onChange={(e) =>
+                            setPaymentInsuranceData((prev) => ({ ...prev, memberNumber: e.target.value }))
+                          }
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+              {/* Remise - toujours visible */}
+              <div className="space-y-4 rounded-lg border p-4 bg-card">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Percent className="h-5 w-5 text-primary" />
+                      <span className="font-medium">Bénéficie d'une remise</span>
+                    </div>
+                    <Switch
+                      checked={paymentDiscountData.hasDiscount}
+                      onCheckedChange={(checked) =>
+                        setPaymentDiscountData((prev) => ({
+                          ...prev,
+                          hasDiscount: checked,
+                          discountPercent: checked ? prev.discountPercent : 0,
+                        }))
+                      }
+                    />
+                  </div>
+                  {paymentDiscountData.hasDiscount && (
+                    <div className="pt-2 border-t space-y-2">
+                      <Label>Pourcentage de remise (%)</Label>
+                      <Input
+                        type="number"
+                        min={0}
+                        max={100}
+                        placeholder="Ex: 10"
+                        value={paymentDiscountData.discountPercent || ''}
+                        onChange={(e) => {
+                          const v = e.target.value === '' ? 0 : Math.min(100, Math.max(0, Number(e.target.value)));
+                          setPaymentDiscountData((prev) => ({ ...prev, discountPercent: v }));
+                        }}
+                      />
+                    </div>
+                  )}
+                </div>
 
               {/* Payment Method */}
               <div className="space-y-3">
@@ -624,9 +886,12 @@ const PharmacyPaymentsPage: React.FC = () => {
                     setIsCreateDialogOpen(false);
                     setSelectedProducts([]);
                     setPatientId('');
+                    setPatientInfo(null);
                     setPaymentMethod('cash');
                     setReference('');
                     setProductSearch('');
+                    setPaymentInsuranceData({ isInsured: false, establishmentId: '', coveragePercent: 0, memberNumber: '' });
+                    setPaymentDiscountData({ hasDiscount: false, discountPercent: 0 });
                   }}
                 >
                   Annuler
@@ -683,15 +948,54 @@ const PharmacyPaymentsPage: React.FC = () => {
           <CardTitle>Filtres</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-4">
             <div>
               <label className="text-sm font-medium mb-2 block">Date</label>
-              <Input
-                type="date"
-                value={dateFilter}
-                onChange={(e) => setDateFilter(e.target.value)}
-                onKeyPress={handleKeyPress}
-              />
+              <div className="flex gap-2">
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-full justify-start text-left font-normal",
+                        !dateFilter && "text-muted-foreground"
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {dateFilter ? (
+                        new Date(dateFilter).toLocaleDateString('fr-FR')
+                      ) : (
+                        <span>Tous les paiements</span>
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <CalendarComponent
+                      mode="single"
+                      selected={dateFilter ? new Date(dateFilter) : undefined}
+                      onSelect={(date) => {
+                        if (date) {
+                          setDateFilter(date.toISOString().split('T')[0]);
+                        } else {
+                          setDateFilter('');
+                        }
+                      }}
+                      disabled={(date) => date > new Date()}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
+                {dateFilter && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setDateFilter('')}
+                    className="whitespace-nowrap"
+                  >
+                    Tous
+                  </Button>
+                )}
+              </div>
             </div>
             <div>
               <label className="text-sm font-medium mb-2 block">Statut</label>
@@ -711,6 +1015,52 @@ const PharmacyPaymentsPage: React.FC = () => {
               </Select>
             </div>
             <div>
+              <label className="text-sm font-medium mb-2 block flex items-center gap-2">
+                <Shield className="h-4 w-4" /> Assurance
+              </label>
+              <Select value={insuranceFilter} onValueChange={(v) => { setInsuranceFilter(v as 'all' | 'yes' | 'no'); if (v !== 'yes') setEstablishmentFilter(''); }}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Tous" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Tous</SelectItem>
+                  <SelectItem value="yes">Assurés</SelectItem>
+                  <SelectItem value="no">Non assurés</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {insuranceFilter === 'yes' && (
+              <div>
+                <label className="text-sm font-medium mb-2 block">Assureur</label>
+                <Select value={establishmentFilter || 'all'} onValueChange={(v) => setEstablishmentFilter(v === 'all' ? '' : v)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Tous les assureurs" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Tous les assureurs</SelectItem>
+                    {insuranceEstablishments.map((e) => (
+                      <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            <div>
+              <label className="text-sm font-medium mb-2 block flex items-center gap-2">
+                <Percent className="h-4 w-4" /> Remise
+              </label>
+              <Select value={discountFilter} onValueChange={(v) => setDiscountFilter(v as 'all' | 'yes' | 'no')}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Tous" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Tous</SelectItem>
+                  <SelectItem value="yes">Avec remise</SelectItem>
+                  <SelectItem value="no">Sans remise</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
               <label className="text-sm font-medium mb-2 block">Rechercher</label>
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -724,7 +1074,11 @@ const PharmacyPaymentsPage: React.FC = () => {
               </div>
             </div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={handleExportExcel} className="gap-2">
+              <Download className="h-4 w-4" />
+              Exporter en Excel
+            </Button>
             <Button onClick={handleApplyFilters} className="gap-2">
               <Filter className="h-4 w-4" />
               Appliquer les filtres
@@ -765,22 +1119,35 @@ const PharmacyPaymentsPage: React.FC = () => {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Patient</TableHead>
+                    <TableHead>Assurance</TableHead>
+                    <TableHead>Remise</TableHead>
                     <TableHead>N° Paiement</TableHead>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Montant</TableHead>
-                    <TableHead>Méthode</TableHead>
+                    <TableHead className="text-right">Montant de base</TableHead>
+                    <TableHead className="text-right">Déduction assurance</TableHead>
+                    <TableHead className="text-right">Déduction remise</TableHead>
+                    <TableHead className="text-right">Montant payé</TableHead>
+                    <TableHead>Méthode</TableHead> 
                     <TableHead>Statut</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {payments.map((payment, index) => {
+                  {payments.map((payment) => {
                     const MethodIcon = getPaymentMethodIcon(payment.method);
-                    const isFirstRow = index === 0;
-
+                    // Assurance/remise du paiement (ce dossier), pas du profil patient
+                    const baseNum = payment.amountBase != null ? Number(payment.amountBase) : 0;
+                    const coveragePercent = baseNum > 0 && payment.insuranceDeduction != null && Number(payment.insuranceDeduction) !== 0
+                      ? Math.round((Number(payment.insuranceDeduction) / baseNum) * 100)
+                      : 0;
+                    const discountPercent = baseNum > 0 && payment.discountDeduction != null && Number(payment.discountDeduction) !== 0
+                      ? Math.round((Number(payment.discountDeduction) / baseNum) * 100)
+                      : 0;
+                    const patientWithPayment = payment.patient
+                      ? { ...payment.patient, payment: { coveragePercent, discountPercent } }
+                      : null;
                     return (
-                      <TableRow key={payment.id}>
+                      <TableRow key={payment.id}> 
                         <TableCell>
-                          {payment.patient ? (
+                          {payment.patient ? ( 
                             <div>
                               <p className="font-medium">
                                 {payment.patient.firstName} {payment.patient.lastName}
@@ -794,28 +1161,41 @@ const PharmacyPaymentsPage: React.FC = () => {
                           )}
                         </TableCell>
                         <TableCell>
-                          <Badge variant="outline" className="font-mono">
+                          {patientWithPayment ? (
+                            <PatientInsuranceDiscount patient={patientWithPayment} column="assurance" usePaymentPercent />
+                          ) : (
+                            <span className="text-sm text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {patientWithPayment ? (
+                            <PatientInsuranceDiscount patient={patientWithPayment} column="remise" usePaymentPercent />
+                          ) : (
+                            <span className="text-sm text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="font-mono"> 
                             {payment.id}
                           </Badge>
                         </TableCell>
-                        <TableCell>
-                          {!isFirstRow ? (
-                            <div className="flex items-center gap-2 text-sm">
-                              <CalendarIcon className="h-4 w-4 text-muted-foreground" />
-                              {new Date(payment.createdAt).toLocaleDateString('fr-FR', {
-                                day: '2-digit',
-                                month: '2-digit',
-                                year: 'numeric',
-                                hour: '2-digit',
-                                minute: '2-digit',
-                              })}
-                            </div>
-                          ) : (
-                            <span className="text-muted-foreground">—</span>
-                          )}
+                        <TableCell className="text-right text-muted-foreground"> 
+                          {(payment.amountBase != null && payment.amountBase !== '')
+                            ? Number(payment.amountBase).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + ' GNF'
+                            : '—'} 
                         </TableCell>
-                        <TableCell className="font-semibold">
-                          {payment.amount.toLocaleString()} GNF
+                        <TableCell className="text-right text-muted-foreground">
+                          {(payment.insuranceDeduction != null && Number(payment.insuranceDeduction) !== 0)
+                            ? Number(payment.insuranceDeduction).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + ' GNF'
+                            : '—'}
+                        </TableCell>
+                        <TableCell className="text-right text-muted-foreground">
+                          {(payment.discountDeduction != null && Number(payment.discountDeduction) !== 0)
+                            ? Number(payment.discountDeduction).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + ' GNF'
+                            : '—'}
+                        </TableCell>
+                        <TableCell className="text-right font-semibold text-success">
+                          {(payment.amount != null ? Number(payment.amount) : 0).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} GNF
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">
@@ -825,7 +1205,7 @@ const PharmacyPaymentsPage: React.FC = () => {
                         </TableCell>
                         <TableCell>
                           {getStatusBadge(payment.status)}
-                        </TableCell>
+                        </TableCell> 
                       </TableRow>
                     );
                   })}
@@ -836,7 +1216,8 @@ const PharmacyPaymentsPage: React.FC = () => {
               <div className="mt-6 flex items-center justify-between">
                 <div className="text-sm text-muted-foreground">
                   Affichage de {(currentPage - 1) * itemsPerPage + 1} à {Math.min(currentPage * itemsPerPage, totalItems)} sur {totalItems} paiement(s)
-                </div>
+                </div> 
+
                 <Pagination>
                   <PaginationContent>
                     <PaginationItem>
@@ -850,8 +1231,8 @@ const PharmacyPaymentsPage: React.FC = () => {
                       />
                     </PaginationItem>
                     {getPageNumbers().map((page, index) => (
-                      <PaginationItem key={index}>
-                        {page === 'ellipsis' ? (
+                      <PaginationItem key={index}> 
+                        {page === 'ellipsis' ? (  
                           <PaginationEllipsis />
                         ) : (
                           <PaginationLink
@@ -867,7 +1248,7 @@ const PharmacyPaymentsPage: React.FC = () => {
                           </PaginationLink>
                         )}
                       </PaginationItem>
-                    ))}
+                    ))}  
                     <PaginationItem>
                       <PaginationNext
                         href="#"
@@ -877,16 +1258,16 @@ const PharmacyPaymentsPage: React.FC = () => {
                         }}
                         className={currentPage === totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
                       />
-                    </PaginationItem>
-                  </PaginationContent>
-                </Pagination>
+                    </PaginationItem> 
+                  </PaginationContent> 
+                </Pagination> 
               </div>
             </>
           )}
-        </CardContent>
+        </CardContent> 
       </Card>
     </div>
   );
 };
 
-export default PharmacyPaymentsPage;
+export default PharmacyPaymentsPage ; 

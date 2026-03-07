@@ -26,6 +26,20 @@ export const getReceptionPatients = async (params?: {
   return api.get(endpoint);
 };
 
+/** Assurance (création / mise à jour patient) */
+export interface RegisterInsuranceInput {
+  isInsured: boolean;
+  establishmentId?: string;
+  coveragePercent?: number;
+  memberNumber?: string;
+}
+
+/** Remise (création / mise à jour patient) */
+export interface RegisterDiscountInput {
+  hasDiscount: boolean;
+  discountPercent?: number;
+}
+
 /**
  * Enregistrer un nouveau patient avec paiement
  */
@@ -46,12 +60,15 @@ export const registerPatient = async (data: {
   bedId?: string;
   assignDoctor?: boolean;
   doctorId?: string;
+  insurance?: RegisterInsuranceInput;
+  discount?: RegisterDiscountInput;
 }): Promise<any> => {
   return api.post('/reception/patients/register', data);
 };
 
 /**
  * Enregistrer un paiement pour un patient existant
+ * insurance / discount : optionnels, pour mettre à jour le patient et appliquer au montant
  */
 export const registerPatientPayment = async (patientId: string, paymentData: {
   method: 'cash' | 'orange_money';
@@ -59,6 +76,8 @@ export const registerPatientPayment = async (patientId: string, paymentData: {
   type: 'consultation' | 'lab' | 'imaging' | 'pharmacy';
   reference?: string;
   relatedId?: string;
+  insurance?: RegisterInsuranceInput;
+  discount?: RegisterDiscountInput;
 }): Promise<any> => {
   return api.post(`/reception/patients/${patientId}/payment`, paymentData);
 };
@@ -70,22 +89,71 @@ export const getReceptionPayments = async (params?: {
   page?: number;
   limit?: number;
   date?: string;
+  dateFrom?: string;
+  dateTo?: string;
   type?: string;
   status?: string;
   search?: string;
+  isInsured?: boolean;
+  hasDiscount?: boolean;
+  insuranceEstablishmentId?: string;
 }): Promise<any> => {
   const queryParams = new URLSearchParams();
   if (params?.page) queryParams.append('page', params.page.toString());
   if (params?.limit) queryParams.append('limit', params.limit.toString());
   if (params?.date) queryParams.append('date', params.date);
+  if (params?.dateFrom) queryParams.append('dateFrom', params.dateFrom);
+  if (params?.dateTo) queryParams.append('dateTo', params.dateTo);
   if (params?.type) queryParams.append('type', params.type);
   if (params?.status) queryParams.append('status', params.status);
   if (params?.search) queryParams.append('search', params.search);
+  if (params?.isInsured !== undefined) queryParams.append('isInsured', params.isInsured.toString());
+  if (params?.hasDiscount !== undefined) queryParams.append('hasDiscount', params.hasDiscount.toString());
+  if (params?.insuranceEstablishmentId) queryParams.append('insuranceEstablishmentId', params.insuranceEstablishmentId);
 
   const queryString = queryParams.toString();
   const endpoint = queryString ? `/reception/payments?${queryString}` : '/reception/payments';
   
   return api.get(endpoint);
+};
+
+/**
+ * Exporter les paiements réception en Excel
+ */
+export const exportReceptionPayments = async (params?: {
+  date?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  type?: string;
+  search?: string;
+  isInsured?: boolean;
+  hasDiscount?: boolean;
+  insuranceEstablishmentId?: string;
+}): Promise<Blob> => {
+  const queryParams = new URLSearchParams();
+  if (params?.date) queryParams.append('date', params.date);
+  if (params?.dateFrom) queryParams.append('dateFrom', params.dateFrom);
+  if (params?.dateTo) queryParams.append('dateTo', params.dateTo);
+  if (params?.type) queryParams.append('type', params.type);
+  if (params?.search) queryParams.append('search', params.search);
+  if (params?.isInsured !== undefined) queryParams.append('isInsured', params.isInsured.toString());
+  if (params?.hasDiscount !== undefined) queryParams.append('hasDiscount', params.hasDiscount.toString());
+  if (params?.insuranceEstablishmentId) queryParams.append('insuranceEstablishmentId', params.insuranceEstablishmentId);
+
+  const queryString = queryParams.toString();
+  const endpoint = queryString ? `/reception/payments/export?${queryString}` : '/reception/payments/export';
+
+  const url = buildApiUrl(endpoint);
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: getDefaultHeaders(),
+  });
+
+  if (!response.ok) {
+    throw new Error('Erreur lors de l\'export');
+  }
+
+  return response.blob();
 };
 
 /**
@@ -98,6 +166,9 @@ export const getReceptionLabPayments = async (params?: {
   status?: string;
   search?: string;
   type?: string;
+  isInsured?: boolean;
+  hasDiscount?: boolean;
+  insuranceEstablishmentId?: string;
 }): Promise<any> => {
   const queryParams = new URLSearchParams();
   if (params?.page) queryParams.append('page', params.page.toString());
@@ -106,6 +177,9 @@ export const getReceptionLabPayments = async (params?: {
   if (params?.status) queryParams.append('status', params.status);
   if (params?.search) queryParams.append('search', params.search);
   if (params?.type) queryParams.append('type', params.type);
+  if (params?.isInsured !== undefined) queryParams.append('isInsured', params.isInsured.toString());
+  if (params?.hasDiscount !== undefined) queryParams.append('hasDiscount', params.hasDiscount.toString());
+  if (params?.insuranceEstablishmentId) queryParams.append('insuranceEstablishmentId', params.insuranceEstablishmentId);
 
   const queryString = queryParams.toString();
   const endpoint = queryString ? `/reception/lab-payments?${queryString}` : '/reception/lab-payments';
@@ -115,6 +189,7 @@ export const getReceptionLabPayments = async (params?: {
 
 /**
  * Payer une demande de laboratoire ou imagerie
+ * insurance et discount : optionnels, pour appliquer assurance/remise sur le montant (comme enregistrement patient)
  */
 export const payLabRequest = async (id: string, paymentData: {
   method: 'cash' | 'orange_money';
@@ -122,6 +197,8 @@ export const payLabRequest = async (id: string, paymentData: {
   assignToLab?: boolean;
   labTechnicianId?: string;
   type?: 'lab' | 'imaging';
+  insurance?: RegisterInsuranceInput;
+  discount?: RegisterDiscountInput;
 }): Promise<any> => {
   return api.post(`/reception/lab-payments/${id}/pay`, paymentData);
 };
@@ -163,6 +240,13 @@ export const createAssignment = async (assignmentData: {
  */
 export const getReceptionDoctors = async (): Promise<any> => {
   return api.get('/reception/doctors');
+};
+
+/**
+ * Activer ou désactiver la disponibilité d'un médecin pour nouvelles assignations
+ */
+export const toggleDoctorAvailability = async (doctorId: string, available: boolean): Promise<any> => {
+  return api.patch(`/reception/doctors/${doctorId}/availability`, { available });
 };
 
 /**
@@ -249,11 +333,21 @@ export const exportReceptionPatients = async (params?: { search?: string; date?:
 /**
  * Exporter les paiements labo/imagerie en Excel
  */
-export const exportReceptionLabPayments = async (params?: { search?: string; date?: string; status?: string }): Promise<Blob> => {
+export const exportReceptionLabPayments = async (params?: {
+  search?: string;
+  date?: string;
+  status?: string;
+  isInsured?: boolean;
+  hasDiscount?: boolean;
+  insuranceEstablishmentId?: string;
+}): Promise<Blob> => {
   const queryParams = new URLSearchParams();
   if (params?.search) queryParams.append('search', params.search);
   if (params?.date) queryParams.append('date', params.date);
   if (params?.status) queryParams.append('status', params.status);
+  if (params?.isInsured !== undefined) queryParams.append('isInsured', params.isInsured.toString());
+  if (params?.hasDiscount !== undefined) queryParams.append('hasDiscount', params.hasDiscount.toString());
+  if (params?.insuranceEstablishmentId) queryParams.append('insuranceEstablishmentId', params.insuranceEstablishmentId);
 
   const queryString = queryParams.toString();
   const endpoint = queryString ? `/reception/lab-payments/export?${queryString}` : '/reception/lab-payments/export';

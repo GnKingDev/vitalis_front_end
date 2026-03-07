@@ -2,7 +2,7 @@
  * Service pour la pharmacie
  */
 
-import api from '@/config/api';
+import api, { buildApiUrl, getDefaultHeaders } from '@/config/api';
 
 /**
  * Liste tous les produits
@@ -102,6 +102,9 @@ export const getPharmacyPayments = async (params?: {
   date?: string;
   status?: string;
   search?: string;
+  isInsured?: boolean;
+  hasDiscount?: boolean;
+  insuranceEstablishmentId?: string;
 }): Promise<any> => {
   const queryParams = new URLSearchParams();
   if (params?.page) queryParams.append('page', params.page.toString());
@@ -109,11 +112,49 @@ export const getPharmacyPayments = async (params?: {
   if (params?.date) queryParams.append('date', params.date);
   if (params?.status) queryParams.append('status', params.status);
   if (params?.search) queryParams.append('search', params.search);
+  if (params?.isInsured !== undefined) queryParams.append('isInsured', params.isInsured.toString());
+  if (params?.hasDiscount !== undefined) queryParams.append('hasDiscount', params.hasDiscount.toString());
+  if (params?.insuranceEstablishmentId) queryParams.append('insuranceEstablishmentId', params.insuranceEstablishmentId);
 
   const queryString = queryParams.toString();
   const endpoint = queryString ? `/pharmacy/payments?${queryString}` : '/pharmacy/payments';
   
   return api.get(endpoint);
+};
+
+/**
+ * Exporter les paiements pharmacie en Excel
+ */
+export const exportPharmacyPayments = async (params?: {
+  date?: string;
+  status?: string;
+  search?: string;
+  isInsured?: boolean;
+  hasDiscount?: boolean;
+  insuranceEstablishmentId?: string;
+}): Promise<Blob> => {
+  const queryParams = new URLSearchParams();
+  if (params?.date) queryParams.append('date', params.date);
+  if (params?.status) queryParams.append('status', params.status);
+  if (params?.search) queryParams.append('search', params.search);
+  if (params?.isInsured !== undefined) queryParams.append('isInsured', params.isInsured.toString());
+  if (params?.hasDiscount !== undefined) queryParams.append('hasDiscount', params.hasDiscount.toString());
+  if (params?.insuranceEstablishmentId) queryParams.append('insuranceEstablishmentId', params.insuranceEstablishmentId);
+
+  const queryString = queryParams.toString();
+  const endpoint = queryString ? `/pharmacy/payments/export?${queryString}` : '/pharmacy/payments/export';
+
+  const url = buildApiUrl(endpoint);
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: getDefaultHeaders(),
+  });
+
+  if (!response.ok) {
+    throw new Error('Erreur lors de l\'export');
+  }
+
+  return response.blob();
 };
 
 /**
@@ -124,6 +165,16 @@ export const createPharmacyPayment = async (paymentData: {
   items: Array<{ productId: string; quantity: number }>;
   method: 'cash' | 'orange_money';
   reference?: string;
+  insurance?: {
+    isInsured: boolean;
+    establishmentId?: string;
+    coveragePercent?: number;
+    memberNumber?: string;
+  };
+  discount?: {
+    hasDiscount: boolean;
+    discountPercent?: number;
+  };
 }): Promise<any> => {
   return api.post('/pharmacy/payments', paymentData);
 };

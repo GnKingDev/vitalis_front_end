@@ -5,6 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { getNavigationForRole, getRoleLabel } from '@/config/navigation';
 import vitalisLogo from '@/assets/logo-vitalis.png';
 import {
+  Archive,
   LayoutDashboard,
   UserPlus,
   Calendar,
@@ -29,6 +30,7 @@ import {
   Tag,
   Bed,
   DollarSign,
+  ShieldCheck,
   ChevronDown,
   ChevronRight,
   LogOut,
@@ -43,6 +45,7 @@ import {
 } from '@/components/ui/collapsible';
 
 const iconMap: Record<string, React.ElementType> = {
+  Archive,
   LayoutDashboard,
   UserPlus,
   Calendar,
@@ -67,6 +70,7 @@ const iconMap: Record<string, React.ElementType> = {
   Tag,
   Bed,
   DollarSign,
+  ShieldCheck,
 };
 
 interface AppSidebarProps {
@@ -87,10 +91,21 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ isOpen, onToggle }) => {
     );
   };
 
-  const isActive = (href: string) => location.pathname === href;
+  const isActive = (href: string) => {
+    const [path, search] = href.split('?');
+    if (location.pathname !== path) return false;
+    const current = new URLSearchParams(location.search);
+    if (search) {
+      const params = new URLSearchParams(search);
+      return Array.from(params.entries()).every(([k, v]) => current.get(k) === v);
+    }
+    // Lien sans query : actif uniquement si l'URL n'a pas status=archived (vue "Dossiers archivés")
+    if (current.get('status') === 'archived') return false;
+    return true;
+  };
   const isParentActive = (href: string, children?: { href: string }[]) => {
     if (isActive(href)) return true;
-    return children?.some((child) => location.pathname.startsWith(child.href));
+    return children?.some((child) => isActive(child.href) || location.pathname.startsWith(child.href.split('?')[0]));
   };
 
   return (

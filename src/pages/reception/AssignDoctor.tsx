@@ -6,6 +6,16 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -45,12 +55,14 @@ import {
   createAssignment,
 } from '@/services/api/receptionService';
 import { api } from '@/config/api';
+import { PatientInsuranceDiscount } from '@/components/shared/PatientInsuranceDiscount';
 
 const AssignDoctor: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [appliedSearch, setAppliedSearch] = useState('');
   const [selectedDoctor, setSelectedDoctor] = useState('');
   const [assignDialogOpen, setAssignDialogOpen] = useState(false);
+  const [confirmAssignOpen, setConfirmAssignOpen] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [patients, setPatients] = useState<any[]>([]);
@@ -460,6 +472,7 @@ const AssignDoctor: React.FC = () => {
                             </>
                           )}
                         </div>
+                        <PatientInsuranceDiscount patient={patient} variant="inline" usePaymentPercent className="mt-1" />
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
@@ -658,7 +671,11 @@ const AssignDoctor: React.FC = () => {
                 >
                   Annuler
                 </Button>
-                <Button className="flex-1" onClick={handleAssign} disabled={isAssigning}>
+                <Button
+                  className="flex-1"
+                  onClick={() => setConfirmAssignOpen(true)}
+                  disabled={isAssigning}
+                >
                   {isAssigning ? (
                     <>
                       <Clock className="h-4 w-4 mr-2 animate-spin" />
@@ -672,6 +689,33 @@ const AssignDoctor: React.FC = () => {
                   )}
                 </Button>
               </div>
+
+              {/* Confirmation assignation */}
+              <AlertDialog open={confirmAssignOpen} onOpenChange={setConfirmAssignOpen}>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Confirmer l'assignation</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Êtes-vous sûr de vouloir assigner ce patient au Dr. {doctors.find(d => d.id === selectedDoctor)?.name || 'sélectionné'} ?
+                      Cette action enverra le patient en salle de consultation.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Annuler</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={(e) => {
+                        e.preventDefault();
+                        setConfirmAssignOpen(false);
+                        handleAssign();
+                      }}
+                      className="gap-2"
+                    >
+                      <Check className="h-4 w-4" />
+                      Confirmer l'assignation
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             </div>
           )}
         </DialogContent>

@@ -42,6 +42,7 @@ import { getPatients, getPatientById, getPatientDossiers, getPatientTimeline, ge
 import { getConsultations } from '@/services/api/consultationsService';
 import { getLabRequests } from '@/services/api/labService';
 import type { Patient } from '@/types';
+import { PatientInsuranceDiscount } from '@/components/shared/PatientInsuranceDiscount';
 
 const PatientsPage: React.FC = () => {
   const { user } = useAuth();
@@ -113,10 +114,14 @@ const PatientsPage: React.FC = () => {
           setSelectedPatientData(patientResponse.data);
         }
 
-        // Load dossiers
+        // Load dossiers (including archived)
         const dossiersResponse = await getPatientDossiers(selectedPatient);
         if (dossiersResponse.success && dossiersResponse.data) {
-          setDossiers(dossiersResponse.data);
+          // Backend returns { data: { dossiers: [...] }, pagination }
+          const list = Array.isArray(dossiersResponse.data)
+            ? dossiersResponse.data
+            : (dossiersResponse.data?.dossiers || []);
+          setDossiers(list);
         }
 
         // Load timeline
@@ -314,6 +319,7 @@ const PatientsPage: React.FC = () => {
                       {patient.phone.slice(-8)}
                     </span>
                   </div>
+                  <PatientInsuranceDiscount patient={patient} variant="inline" className="mt-1" />
                 </div>
               </div>
             </CardContent>
@@ -400,6 +406,7 @@ const PatientsPage: React.FC = () => {
                     <Badge variant="outline" className="ml-2 font-mono text-xs">
                       {selectedPatientData.vitalisId}
                     </Badge>
+                    <PatientInsuranceDiscount patient={selectedPatientData} variant="block" className="mt-2" />
                   </div>
                 </>
               )}

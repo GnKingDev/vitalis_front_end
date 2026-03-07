@@ -33,6 +33,7 @@ import {
 import { getDoctorDossiers } from '@/services/api/doctorService';
 import { getConsultations } from '@/services/api/consultationsService';
 import { Link } from 'react-router-dom';
+import { PatientInsuranceDiscount } from '@/components/shared/PatientInsuranceDiscount';
 
 const ConsultationsInProgressPage: React.FC = () => {
   const { user } = useAuth();
@@ -203,7 +204,8 @@ const ConsultationsInProgressPage: React.FC = () => {
                 <TableRow>
                   <TableHead>Patient</TableHead>
                   <TableHead>ID Vitalis</TableHead>
-                  <TableHead>Contact</TableHead>
+                  <TableHead>Assurance</TableHead>
+                  <TableHead>Remise</TableHead>
                   <TableHead>Consultation</TableHead>
                   <TableHead>Début</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
@@ -212,7 +214,7 @@ const ConsultationsInProgressPage: React.FC = () => {
               <TableBody>
                 {patients.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="h-24 text-center">
+                    <TableCell colSpan={7} className="h-24 text-center">
                       Aucune consultation trouvée.
                     </TableCell>
                   </TableRow>
@@ -264,15 +266,10 @@ const ConsultationsInProgressPage: React.FC = () => {
                           </Badge>
                         </TableCell>
                         <TableCell>
-                          <div className="space-y-1">
-                            <p className="text-sm flex items-center gap-1">
-                              <Phone className="h-3 w-3" />
-                              {patient.phone}
-                            </p>
-                            {patient.email && (
-                              <p className="text-xs text-muted-foreground">{patient.email}</p>
-                            )}
-                          </div>
+                          <PatientInsuranceDiscount patient={patient} column="assurance" />
+                        </TableCell>
+                        <TableCell>
+                          <PatientInsuranceDiscount patient={patient} column="remise" />
                         </TableCell>
                         <TableCell>
                           {consultationData ? (

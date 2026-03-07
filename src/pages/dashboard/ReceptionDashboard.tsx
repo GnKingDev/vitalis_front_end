@@ -19,6 +19,7 @@ import { Link } from 'react-router-dom';
 import { getReceptionStats, getReceptionPatients, getReceptionAssignments } from '@/services/api/receptionService';
 import { getPayments } from '@/services/api/paymentsService';
 import { toast } from 'sonner';
+import { PatientInsuranceDiscount } from '@/components/shared/PatientInsuranceDiscount';
 
 const ReceptionDashboard: React.FC = () => {
   const { user } = useAuth();
@@ -195,6 +196,7 @@ const ReceptionDashboard: React.FC = () => {
                         <Phone className="h-3 w-3" />
                         {patient.phone}
                       </p>
+                      <PatientInsuranceDiscount patient={patient} variant="inline" className="mt-0.5" />
                     </div>
                   </div>
                   <div className="text-right">

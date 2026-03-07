@@ -32,23 +32,59 @@ import {
   Clock,
   CheckCircle2,
   Eye,
+  Filter,
+  Calendar as CalendarIcon,
 } from 'lucide-react';
-import { getDoctorDossiers } from '@/services/api/doctorService';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Switch } from '@/components/ui/switch';
+import { Calendar as CalendarComponent } from '@/components/ui/calendar';
+import { cn } from '@/lib/utils';
+import { getDoctorDossiers, updateMyAvailability } from '@/services/api/doctorService';
 import { getConsultations } from '@/services/api/consultationsService';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
+import { PatientInsuranceDiscount } from '@/components/shared/PatientInsuranceDiscount';
 
 const DoctorPatientsPage: React.FC = () => {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const statusFromUrl = searchParams.get('status') || 'all';
+  const today = new Date().toISOString().split('T')[0];
   const [searchQuery, setSearchQuery] = useState('');
   const [appliedSearch, setAppliedSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>(statusFromUrl);
+  const [appliedStatusFilter, setAppliedStatusFilter] = useState<string>(statusFromUrl);
+  const [dateFilter, setDateFilter] = useState<string>('');
+  const [appliedDateFilter, setAppliedDateFilter] = useState<string>('');
   const [currentPage, setCurrentPage] = useState(1);
   const [patients, setPatients] = useState<any[]>([]);
   const [consultations, setConsultations] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
+  const [availabilityLoading, setAvailabilityLoading] = useState(false);
   
   const itemsPerPage = 5;
+
+  const isAvailable = user?.doctorIsAvailable !== false;
+  const handleToggleAvailability = async (checked: boolean) => {
+    if (!user?.id || user.role !== 'doctor') return;
+    setAvailabilityLoading(true);
+    try {
+      await updateMyAvailability(checked);
+      await refreshUser();
+    } catch (err) {
+      console.error('Erreur mise à jour disponibilité:', err);
+    } finally {
+      setAvailabilityLoading(false);
+    }
+  };
 
   // Load assigned patients
   useEffect(() => {
@@ -61,7 +97,8 @@ const DoctorPatientsPage: React.FC = () => {
           page: currentPage,
           limit: itemsPerPage,
           search: appliedSearch || undefined,
-          status: 'active', // Only active dossiers
+          status: appliedStatusFilter === 'all' ? 'active' : appliedStatusFilter,
+          date: appliedDateFilter || undefined,
         });
         
         if (response.success && response.data) {
@@ -102,7 +139,7 @@ const DoctorPatientsPage: React.FC = () => {
     };
     
     loadPatients();
-  }, [currentPage, appliedSearch, user?.id]);
+  }, [currentPage, appliedSearch, appliedStatusFilter, appliedDateFilter, user?.id]);
 
   // Load consultations for all patients
   useEffect(() => {
@@ -130,21 +167,36 @@ const DoctorPatientsPage: React.FC = () => {
     loadConsultations();
   }, [patients, user?.id]);
 
-  // Réinitialiser la page quand la recherche appliquée change
+  // Synchroniser les filtres depuis l'URL quand elle change (ex: clic sur "Dossiers archivés")
+  useEffect(() => {
+    const s = searchParams.get('status');
+    if (s && ['all', 'assigned', 'in_consultation', 'completed', 'archived'].includes(s)) {
+      setStatusFilter(s);
+      setAppliedStatusFilter(s);
+    }
+  }, [searchParams]);
+
+  // Réinitialiser la page quand les filtres changent
   useEffect(() => {
     setCurrentPage(1);
-  }, [appliedSearch]);
+  }, [appliedSearch, appliedStatusFilter, appliedDateFilter]);
 
-  // Appliquer la recherche
-  const handleApplySearch = () => {
+  // Appliquer les filtres
+  const handleApplyFilters = () => {
     setAppliedSearch(searchQuery);
+    setAppliedStatusFilter(statusFilter);
+    setAppliedDateFilter(dateFilter);
     setCurrentPage(1);
   };
 
-  // Réinitialiser la recherche
-  const handleResetSearch = () => {
+  // Réinitialiser les filtres
+  const handleResetFilters = () => {
     setSearchQuery('');
     setAppliedSearch('');
+    setStatusFilter('all');
+    setAppliedStatusFilter('all');
+    setDateFilter('');
+    setAppliedDateFilter('');
     setCurrentPage(1);
   };
 
@@ -190,12 +242,21 @@ const DoctorPatientsPage: React.FC = () => {
     return pages;
   };
 
-  // Statistiques
+  // Statistiques (inclure Archivé dans Terminées)
   const stats = useMemo(() => {
-    const assigned = patients.filter((p: any) => p.assignment?.status === 'assigned').length;
+    const completed = patients.filter((p: any) => {
+      const dossierStatus = p?.dossier?.status;
+      const assignmentStatus = p?.assignment?.status;
+      const consultationStatus = p?.dossier?.consultation?.status;
+      return dossierStatus === 'archived' || dossierStatus === 'completed' || assignmentStatus === 'completed' || consultationStatus === 'completed';
+    }).length;
     const inConsultation = patients.filter((p: any) => p.assignment?.status === 'in_consultation').length;
-    const completed = patients.filter((p: any) => p.assignment?.status === 'completed').length;
-    
+    const assigned = patients.filter((p: any) => {
+      const isCompleted = p?.dossier?.status === 'archived' || p?.dossier?.status === 'completed' || p?.assignment?.status === 'completed' || p?.dossier?.consultation?.status === 'completed';
+      if (isCompleted) return false;
+      return p.assignment?.status === 'assigned';
+    }).length;
+
     return {
       total: patients.length,
       assigned,
@@ -213,23 +274,31 @@ const DoctorPatientsPage: React.FC = () => {
     return inProgressPatient?.id || null;
   }, [patients]);
 
-  // Obtenir le libellé du statut (seulement "En cours" ou "En attente")
-  const getStatusLabel = (patientId: string) => {
-    // Un seul patient peut être "En cours" à la fois
-    if (patientId === currentConsultationPatientId) {
+  // Obtenir le libellé du statut (Archivé, Terminé, En cours, En attente)
+  const getStatusLabel = (patientOrId: any) => {
+    const patient = typeof patientOrId === 'object' ? patientOrId : patients.find((p: any) => p.id === patientOrId);
+    const dossierStatus = patient?.dossier?.status;
+    const assignmentStatus = patient?.assignment?.status;
+    const consultationStatus = patient?.dossier?.consultation?.status;
+    if (dossierStatus === 'archived') return 'Archivé';
+    if (dossierStatus === 'completed' || assignmentStatus === 'completed' || consultationStatus === 'completed') return 'Terminé';
+    if ((typeof patientOrId === 'string' ? patientOrId : patient?.id) === currentConsultationPatientId) {
       return 'En cours';
     }
-    // Tous les autres sont "En attente"
     return 'En attente';
   };
 
   // Obtenir la couleur du statut
-  const getStatusColor = (patientId: string) => {
-    // Un seul patient peut être "En cours" à la fois
-    if (patientId === currentConsultationPatientId) {
+  const getStatusColor = (patientOrId: any) => {
+    const patient = typeof patientOrId === 'object' ? patientOrId : patients.find((p: any) => p.id === patientOrId);
+    const dossierStatus = patient?.dossier?.status;
+    const assignmentStatus = patient?.assignment?.status;
+    const consultationStatus = patient?.dossier?.consultation?.status;
+    if (dossierStatus === 'archived') return 'bg-muted text-muted-foreground border-muted-foreground/30';
+    if (dossierStatus === 'completed' || assignmentStatus === 'completed' || consultationStatus === 'completed') return 'bg-success/10 text-success border-success';
+    if ((typeof patientOrId === 'string' ? patientOrId : patient?.id) === currentConsultationPatientId) {
       return 'bg-warning/10 text-warning border-warning';
     }
-    // Tous les autres sont "En attente"
     return 'bg-muted text-muted-foreground border-muted-foreground/20';
   };
 
@@ -239,6 +308,27 @@ const DoctorPatientsPage: React.FC = () => {
         title="Patients assignés"
         description="Liste des patients assignés à votre consultation"
       />
+
+      {/* Disponibilité médecin */}
+      {user?.role === 'doctor' && (
+        <Card>
+          <CardContent className="py-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium">Disponible pour recevoir des patients</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {isAvailable ? 'Vous êtes visible à la réception pour les nouvelles assignations' : 'Vous n\'êtes pas visible pour les assignations'}
+                </p>
+              </div>
+              <Switch
+                checked={isAvailable}
+                onCheckedChange={handleToggleAvailability}
+                disabled={availabilityLoading}
+              />
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Statistiques */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -290,11 +380,11 @@ const DoctorPatientsPage: React.FC = () => {
         </Card>
       </div>
 
-      {/* Recherche */}
+      {/* Filtres */}
       <Card>
         <CardContent className="py-4">
-          <div className="flex gap-2">
-            <div className="relative flex-1">
+          <div className="flex flex-col sm:flex-row gap-3 flex-wrap">
+            <div className="relative flex-1 min-w-[200px]">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Rechercher par nom, ID Vitalis ou téléphone..."
@@ -302,23 +392,65 @@ const DoctorPatientsPage: React.FC = () => {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    handleApplySearch();
-                  }
+                  if (e.key === 'Enter') handleApplyFilters();
                 }}
               />
             </div>
-            {appliedSearch && (
-              <Button
-                variant="outline"
-                onClick={handleResetSearch}
-              >
+            <Select
+              value={statusFilter}
+              onValueChange={(v) => {
+                setStatusFilter(v);
+                setAppliedStatusFilter(v);
+                setCurrentPage(1);
+                setSearchParams((prev) => {
+                  const p = new URLSearchParams(prev);
+                  if (v === 'all') p.delete('status');
+                  else p.set('status', v);
+                  return p;
+                });
+              }}
+            >
+              <SelectTrigger className="w-[180px]">
+                <Filter className="h-4 w-4 mr-2" />
+                <SelectValue placeholder="Statut" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Tous les statuts</SelectItem>
+                <SelectItem value="assigned">En attente</SelectItem>
+                <SelectItem value="in_consultation">En consultation</SelectItem>
+                <SelectItem value="completed">Terminées</SelectItem>
+                <SelectItem value="archived">Archivés</SelectItem>
+              </SelectContent>
+            </Select>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={cn(
+                    'w-[180px] justify-start text-left font-normal',
+                    !dateFilter && 'text-muted-foreground'
+                  )}
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {dateFilter ? new Date(dateFilter + 'T12:00:00').toLocaleDateString('fr-FR') : 'Date assignation'}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <CalendarComponent
+                  mode="single"
+                  selected={dateFilter ? new Date(dateFilter + 'T12:00:00') : undefined}
+                  onSelect={(d) => setDateFilter(d ? d.toISOString().split('T')[0] : '')}
+                />
+              </PopoverContent>
+            </Popover>
+            {(appliedSearch || appliedStatusFilter !== 'all' || appliedDateFilter) && (
+              <Button variant="outline" onClick={handleResetFilters}>
                 Réinitialiser
               </Button>
             )}
-            <Button onClick={handleApplySearch}>
+            <Button onClick={handleApplyFilters}>
               <Search className="h-4 w-4 mr-2" />
-              Rechercher
+              Appliquer
             </Button>
           </div>
         </CardContent>
@@ -352,15 +484,17 @@ const DoctorPatientsPage: React.FC = () => {
                 <TableRow>
                   <TableHead>Patient</TableHead>
                   <TableHead>ID Vitalis</TableHead>
-                  <TableHead>Contact</TableHead>
+                  <TableHead>Assurance</TableHead>
+                  <TableHead>Remise</TableHead>
                   <TableHead>Statut</TableHead>
+                  <TableHead>Dossier archivé</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {patients.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="h-24 text-center">
+                    <TableCell colSpan={7} className="h-24 text-center">
                       Aucun patient trouvé.
                     </TableCell>
                   </TableRow>
@@ -417,26 +551,30 @@ const DoctorPatientsPage: React.FC = () => {
                           </Badge>
                         </TableCell>
                         <TableCell>
-                          <div className="space-y-1">
-                            <p className="text-sm flex items-center gap-1">
-                              <Phone className="h-3 w-3" />
-                              {patient.phone}
-                            </p>
-                            {patient.email && (
-                              <p className="text-xs text-muted-foreground">{patient.email}</p>
-                            )}
-                          </div>
+                          <PatientInsuranceDiscount patient={patient} column="assurance" />
+                        </TableCell>
+                        <TableCell>
+                          <PatientInsuranceDiscount patient={patient} column="remise" />
                         </TableCell>
                         <TableCell>
                           <Badge
                             variant="outline"
-                            className={getStatusColor(patient.id)}
+                            className={getStatusColor(patient)}
                           >
-                            {getStatusLabel(patient.id)}
+                            {getStatusLabel(patient)}
                           </Badge>
                           <p className="text-xs text-muted-foreground mt-1">
                             Assigné le {assignmentDate} à {assignmentTime}
                           </p>
+                        </TableCell>
+                        <TableCell>
+                          {dossier.hasArchivedDossier ? (
+                            <Badge variant="secondary" className="bg-muted">
+                              Oui
+                            </Badge>
+                          ) : (
+                            <span className="text-sm text-muted-foreground">—</span>
+                          )}
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex items-center justify-end gap-2">
@@ -445,8 +583,19 @@ const DoctorPatientsPage: React.FC = () => {
                               size="sm"
                               asChild
                             >
-                              <Link to={`/doctor/consultation?patient=${patient.id}`}>
-                                {assignment.status === 'assigned' ? (
+                              <Link
+                                to={
+                                  dossier.status === 'archived'
+                                    ? `/doctor/consultation?patient=${patient.id}&dossier=${dossier.id}`
+                                    : `/doctor/consultation?patient=${patient.id}${dossier.id ? `&dossier=${dossier.id}` : ''}`
+                                }
+                              >
+                                {dossier.status === 'archived' ? (
+                                  <>
+                                    <Eye className="h-4 w-4 mr-2" />
+                                    Détail
+                                  </>
+                                ) : assignment.status === 'assigned' ? (
                                   <>
                                     <Stethoscope className="h-4 w-4 mr-2" />
                                     Commencer

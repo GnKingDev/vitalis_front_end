@@ -65,6 +65,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import type { User, UserRole } from '@/types';
 import { getRoleLabel, getRoleBadgeClass } from '@/config/navigation';
 import { getUsers, createUser, updateUser, suspendUser, deleteUser } from '@/services/api/usersService';
+import { getLabNumbers } from '@/services/api/labNumbersService';
+import type { LabNumber } from '@/services/api/labNumbersService';
 
 const UsersPage: React.FC = () => {
   const { user: currentUser } = useAuth();
@@ -92,6 +94,7 @@ const UsersPage: React.FC = () => {
     role: 'reception' as UserRole,
     department: '',
     customDepartment: '',
+    labNumberId: '' as string | '',
   });
   const [editUser, setEditUser] = useState({
     name: '',
@@ -99,9 +102,26 @@ const UsersPage: React.FC = () => {
     role: 'reception' as UserRole,
     department: '',
     customDepartment: '',
+    labNumberId: '' as string | '',
   });
+  const [labNumbers, setLabNumbers] = useState<LabNumber[]>([]);
 
   const itemsPerPage = 10;
+
+  // Charger les numéros lab pour le formulaire
+  useEffect(() => {
+    const loadLabNumbers = async () => {
+      try {
+        const response = await getLabNumbers({});
+        if (response.success && response.data) {
+          setLabNumbers(Array.isArray(response.data) ? response.data : []);
+        }
+      } catch {
+        // ignore
+      }
+    };
+    loadLabNumbers();
+  }, []);
 
   // Charger les utilisateurs depuis l'API
   useEffect(() => {
@@ -225,6 +245,7 @@ const UsersPage: React.FC = () => {
       role: user.role,
       department: isCustomDept ? 'other' : (user.department || ''),
       customDepartment: isCustomDept ? (user.department || '') : '',
+      labNumberId: (user as User & { labNumber?: { id: string } }).labNumber?.id || '',
     });
     setIsEditDialogOpen(true);
   };
@@ -257,6 +278,7 @@ const UsersPage: React.FC = () => {
         // Ne pas envoyer de password, le backend le génère automatiquement
         role: newUser.role,
         department: newUser.department === 'other' ? newUser.customDepartment : (newUser.department || undefined),
+        labNumberId: newUser.role === 'lab' && newUser.labNumberId && newUser.labNumberId !== '__none__' ? newUser.labNumberId : undefined,
       });
 
       if (response.success) {
@@ -296,6 +318,7 @@ const UsersPage: React.FC = () => {
           role: 'reception',
           department: '',
           customDepartment: '',
+          labNumberId: '',
         });
         setIsCreateDialogOpen(false);
       } else {
@@ -339,6 +362,7 @@ const UsersPage: React.FC = () => {
         email: editUser.email.trim(),
         role: editUser.role,
         department: editUser.department === 'other' ? editUser.customDepartment : (editUser.department || undefined),
+        labNumberId: editUser.role === 'lab' ? (editUser.labNumberId && editUser.labNumberId !== '__none__' ? editUser.labNumberId : null) : undefined,
       });
 
       if (response.success) {
@@ -367,6 +391,7 @@ const UsersPage: React.FC = () => {
           role: 'reception',
           department: '',
           customDepartment: '',
+          labNumberId: '',
         });
         setIsEditDialogOpen(false);
       } else {
@@ -427,6 +452,7 @@ const UsersPage: React.FC = () => {
           role: 'reception',
           department: '',
           customDepartment: '',
+          labNumberId: '',
         });
       } else {
         toast.error('Erreur', {
@@ -608,6 +634,29 @@ const UsersPage: React.FC = () => {
                   />
                 )}
               </div>
+              {newUser.role === 'lab' && (
+                <div className="space-y-2">
+                  <Label htmlFor="labNumber">Numéro Lab (optionnel)</Label>
+                  <Select
+                    value={newUser.labNumberId || '__none__'}
+                    onValueChange={(value) => setNewUser({ ...newUser, labNumberId: value === '__none__' ? '' : value })}
+                  >
+                    <SelectTrigger id="labNumber">
+                      <SelectValue placeholder="Sélectionner un numéro lab" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">— Aucun —</SelectItem>
+                      {labNumbers
+                        .filter((ln) => !ln.isAssigned)
+                        .map((ln) => (
+                          <SelectItem key={ln.id} value={ln.id}>
+                            {ln.number}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               <div className="flex justify-end gap-2 pt-4 border-t">
                 <Button
                   variant="outline"
@@ -619,6 +668,7 @@ const UsersPage: React.FC = () => {
                       role: 'reception',
                       department: '',
                       customDepartment: '',
+                      labNumberId: '',
                     });
                   }}
                 >
@@ -800,13 +850,14 @@ const UsersPage: React.FC = () => {
               <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
-                    <TableRow>
-                      <TableHead>Utilisateur</TableHead>
-                      <TableHead>Email</TableHead>
-                      <TableHead>Rôle</TableHead>
-                      <TableHead>Département</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
+                <TableRow>
+                  <TableHead>Utilisateur</TableHead>
+                  <TableHead>Email</TableHead>
+                  <TableHead>Rôle</TableHead>
+                  <TableHead>Département</TableHead>
+                  <TableHead>N° Lab</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
                   </TableHeader>
                   <TableBody>
                     {users.map((user) => (
@@ -840,6 +891,13 @@ const UsersPage: React.FC = () => {
                               {user.department || 'N/A'}
                             </span>
                           </div>
+                        </TableCell>
+                        <TableCell>
+                          {user.role === 'lab' && (user as User & { labNumber?: { number: string } }).labNumber ? (
+                            <span className="text-sm font-medium">{(user as User & { labNumber?: { number: string } }).labNumber?.number}</span>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex items-center justify-end gap-2">
@@ -958,7 +1016,7 @@ const UsersPage: React.FC = () => {
               <Select
                 value={editUser.role}
                 onValueChange={(value) => {
-                  setEditUser({ ...editUser, role: value as UserRole, department: '', customDepartment: '' });
+                  setEditUser({ ...editUser, role: value as UserRole, department: '', customDepartment: '', labNumberId: value === 'lab' ? editUser.labNumberId : '' });
                 }}
               >
                 <SelectTrigger id="edit-role">
@@ -1000,6 +1058,28 @@ const UsersPage: React.FC = () => {
                 />
               )}
             </div>
+            {editUser.role === 'lab' && (
+              <div className="space-y-2">
+                <Label htmlFor="edit-labNumber">Numéro Lab</Label>
+                <Select
+                  value={editUser.labNumberId || '__none__'}
+                  onValueChange={(value) => setEditUser({ ...editUser, labNumberId: value === '__none__' ? '' : value })}
+                >
+                  <SelectTrigger id="edit-labNumber">
+                    <SelectValue placeholder="Sélectionner un numéro lab" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">— Aucun —</SelectItem>
+                    {labNumbers.map((ln) => (
+                      <SelectItem key={ln.id} value={ln.id}>
+                        {ln.number}
+                        {ln.isAssigned && ln.userId !== editingUser?.id && ' (assigné)'}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div className="flex justify-between items-center pt-4 border-t">
               <Button
                 variant="outline"
@@ -1022,6 +1102,7 @@ const UsersPage: React.FC = () => {
                       role: 'reception',
                       department: '',
                       customDepartment: '',
+                      labNumberId: '',
                     });
                   }}
                 >

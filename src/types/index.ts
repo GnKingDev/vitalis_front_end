@@ -3,6 +3,11 @@
 // User Roles
 export type UserRole = 'admin' | 'reception' | 'doctor' | 'lab' | 'pharmacy';
 
+export interface LabNumberRef {
+  id: string;
+  number: string;
+}
+
 export interface User {
   id: string;
   name: string;
@@ -10,7 +15,9 @@ export interface User {
   role: UserRole;
   avatar?: string;
   department?: string;
+  labNumber?: LabNumberRef | null;
   mustChangePassword?: boolean; // Indique si l'utilisateur doit changer son mot de passe
+  doctorIsAvailable?: boolean; // Pour les médecins : disponible pour recevoir des patients
 }
 
 // Patient Types
@@ -29,6 +36,10 @@ export interface Patient {
   allergies?: string[];
   createdAt: string;
   updatedAt: string;
+  // Assurance / Remise (champs plats renvoyés par le backend sur chaque patient)
+  insuranceEstablishmentName?: string | null;
+  insuranceCoveragePercent?: number;
+  discountPercent?: number;
 }
 
 // Payment Types

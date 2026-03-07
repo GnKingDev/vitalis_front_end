@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -12,9 +12,11 @@ import {
   Calendar,
   Stethoscope,
   Printer,
+  FileDown,
   TestTube2,
   Scan,
   FlaskConical,
+  Loader2,
 } from 'lucide-react';
 import {
   Table,
@@ -28,10 +30,16 @@ import type { LabRequest, ImagingRequest, LabResult } from '@/types';
 import { getDoctorResultById } from '@/services/api/doctorService';
 import { getPatientById } from '@/services/api/patientsService';
 import { getConsultationById } from '@/services/api/consultationsService';
+import { getLabRequestPDF } from '@/services/api/labService';
+import { getImagingRequestPDF } from '@/services/api/imagingService';
+import { toast } from 'sonner';
+import PageLoader from '@/components/shared/PageLoader';
 
 const ResultDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+  const returnTo = (location.state as { returnTo?: string })?.returnTo;
   const { user } = useAuth();
   
   const [result, setResult] = useState<{ type: 'lab' | 'imaging'; data: any } | null>(null);
@@ -39,6 +47,8 @@ const ResultDetailPage: React.FC = () => {
   const [doctor, setDoctor] = useState<any>(null);
   const [consultation, setConsultation] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isPrinting, setIsPrinting] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
 
   // Load result data
   useEffect(() => {
@@ -91,6 +101,20 @@ const ResultDetailPage: React.FC = () => {
     loadResult();
   }, [id]);
 
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Chargement" description="Chargement des résultats" />
+        <Card>
+          <CardContent>
+            <PageLoader message="Chargement des résultats en cours..." />
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   // Check if result exists
   if (!result) {
     return (
@@ -100,9 +124,9 @@ const ResultDetailPage: React.FC = () => {
           <CardContent className="py-12 text-center">
             <p className="text-muted-foreground mb-4">Le résultat est introuvable.</p>
             <p className="text-sm text-muted-foreground mb-4">ID recherché : {id}</p>
-            <Button onClick={() => navigate('/doctor/lab-results')} variant="outline">
+            <Button onClick={() => navigate(returnTo || '/doctor/lab-results')} variant="outline">
               <ArrowLeft className="h-4 w-4 mr-2" />
-              Retour à la liste
+              {returnTo ? 'Retour au dossier' : 'Retour à la liste'}
             </Button>
           </CardContent>
         </Card>
@@ -118,9 +142,9 @@ const ResultDetailPage: React.FC = () => {
         <Card>
           <CardContent className="py-12 text-center">
             <p className="text-muted-foreground mb-4">Le patient associé à ce résultat est introuvable.</p>
-            <Button onClick={() => navigate('/doctor/lab-results')} variant="outline">
+            <Button onClick={() => navigate(returnTo || '/doctor/lab-results')} variant="outline">
               <ArrowLeft className="h-4 w-4 mr-2" />
-              Retour à la liste
+              {returnTo ? 'Retour au dossier' : 'Retour à la liste'}
             </Button>
           </CardContent>
         </Card>
@@ -142,10 +166,60 @@ const ResultDetailPage: React.FC = () => {
   const labRequest = isLab ? { ...rawLabData, exams: labExams, results: labResultsArray } : null;
   const imagingRequest = !isLab ? (result.data as ImagingRequest) : null;
 
-  const handlePrint = () => {
-    setTimeout(() => {
-      window.print();
-    }, 100);
+  const handlePrint = async () => {
+    setIsPrinting(true);
+    try {
+      const blob = isLab
+        ? await getLabRequestPDF(requestId)
+        : await getImagingRequestPDF(requestId);
+      const url = window.URL.createObjectURL(blob);
+      const printWindow = window.open(url, '_blank');
+      if (printWindow) {
+        let printed = false;
+        const doPrint = () => {
+          if (printed) return;
+          printed = true;
+          printWindow.print();
+          window.URL.revokeObjectURL(url);
+        };
+        printWindow.addEventListener('load', () => setTimeout(doPrint, 500));
+        setTimeout(doPrint, 2000);
+      } else {
+        window.URL.revokeObjectURL(url);
+        toast.error('Veuillez autoriser les pop-ups pour imprimer le PDF');
+      }
+    } catch (err: any) {
+      toast.error('Erreur', {
+        description: err?.message || 'Impossible de générer le PDF',
+      });
+    } finally {
+      setIsPrinting(false);
+    }
+  };
+
+  const requestId = (result.data as any).request?.id ?? (result.data as any).id ?? id;
+  const handleDownloadPDF = async () => {
+    setIsDownloading(true);
+    try {
+      const blob = isLab
+        ? await getLabRequestPDF(requestId)
+        : await getImagingRequestPDF(requestId);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `resultat-${isLab ? 'lab' : 'imagerie'}-${patient.firstName}-${patient.lastName}-${requestId}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      a.remove();
+      toast.success('PDF téléchargé');
+    } catch (err: any) {
+      toast.error('Erreur', {
+        description: err?.message || 'Impossible de générer le PDF',
+      });
+    } finally {
+      setIsDownloading(false);
+    }
   };
 
   return (
@@ -155,17 +229,47 @@ const ResultDetailPage: React.FC = () => {
         <Button
           variant="outline"
           size="sm"
-          onClick={() => navigate('/doctor/lab-results')}
+          onClick={() => navigate(returnTo || '/doctor/lab-results')}
           className="gap-2 mt-1"
         >
           <ArrowLeft className="h-4 w-4" />
-          Retour
+          {returnTo ? 'Retour au dossier' : 'Retour'}
         </Button>
         <div className="flex-1">
           <PageHeader
             title={isLab ? 'Résultats de laboratoire' : 'Résultats d\'imagerie'}
-            description={`Détails des résultats - ${(result.data as any).request?.id ?? (result.data as any).id ?? id}`}
+            description={`Détails des résultats - ${requestId}`}
           />
+        </div>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleDownloadPDF}
+            disabled={isDownloading}
+            className="gap-2"
+          >
+            {isDownloading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <FileDown className="h-4 w-4" />
+            )}
+            {isDownloading ? 'Téléchargement...' : 'Télécharger PDF'}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handlePrint}
+            disabled={isPrinting}
+            className="gap-2"
+          >
+            {isPrinting ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Printer className="h-4 w-4" />
+            )}
+            {isPrinting ? 'Préparation...' : 'Imprimer'}
+          </Button>
         </div>
       </div>
 

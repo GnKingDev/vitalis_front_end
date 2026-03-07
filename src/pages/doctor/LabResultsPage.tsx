@@ -34,12 +34,15 @@ import {
   Search,
   Eye,
   Printer,
+  FileDown,
   Calendar,
   List,
   Scan,
 } from 'lucide-react';
 import type { LabRequest, ImagingRequest } from '@/types';
 import { getDoctorResults } from '@/services/api/doctorService';
+import { getLabRequestPDF } from '@/services/api/labService';
+import { getImagingRequestPDF } from '@/services/api/imagingService';
 import { toast } from 'sonner';
 
 const LabResultsPage: React.FC = () => {
@@ -52,6 +55,8 @@ const LabResultsPage: React.FC = () => {
   const [selectedRequestForExams, setSelectedRequestForExams] = useState<string | null>(null);
   const [results, setResults] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [printingIds, setPrintingIds] = useState<Set<string>>(new Set());
+  const [downloadingIds, setDownloadingIds] = useState<Set<string>>(new Set());
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
   const itemsPerPage = 10;
@@ -195,12 +200,67 @@ const LabResultsPage: React.FC = () => {
     return pages;
   };
 
-  const handlePrint = (requestId: string, type: 'lab' | 'imaging') => {
-    // Navigate to detail page and trigger print
-    navigate(`/doctor/lab-results/${requestId}`);
-    setTimeout(() => {
-      window.print();
-    }, 500);
+  const handlePrint = async (requestId: string, type: 'lab' | 'imaging') => {
+    setPrintingIds((prev) => new Set(prev).add(requestId));
+    try {
+      const blob = type === 'lab'
+        ? await getLabRequestPDF(requestId)
+        : await getImagingRequestPDF(requestId);
+      const url = window.URL.createObjectURL(blob);
+      const printWindow = window.open(url, '_blank');
+      if (printWindow) {
+        let printed = false;
+        const doPrint = () => {
+          if (printed) return;
+          printed = true;
+          printWindow.print();
+          window.URL.revokeObjectURL(url);
+        };
+        printWindow.addEventListener('load', () => setTimeout(doPrint, 500));
+        setTimeout(doPrint, 2000);
+      } else {
+        window.URL.revokeObjectURL(url);
+        toast.error('Veuillez autoriser les pop-ups pour imprimer le PDF');
+      }
+    } catch (err: any) {
+      toast.error('Erreur', {
+        description: err?.message || 'Impossible de générer le PDF',
+      });
+    } finally {
+      setPrintingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(requestId);
+        return next;
+      });
+    }
+  };
+
+  const handleDownloadPDF = async (requestId: string, type: 'lab' | 'imaging', patientName: string) => {
+    setDownloadingIds((prev) => new Set(prev).add(requestId));
+    try {
+      const blob = type === 'lab'
+        ? await getLabRequestPDF(requestId)
+        : await getImagingRequestPDF(requestId);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `resultat-${type}-${patientName.replace(/\s+/g, '-')}-${requestId}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      a.remove();
+      toast.success('PDF téléchargé');
+    } catch (err: any) {
+      toast.error('Erreur', {
+        description: err?.message || 'Impossible de générer le PDF',
+      });
+    } finally {
+      setDownloadingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(requestId);
+        return next;
+      });
+    }
   };
 
   return (
@@ -322,7 +382,15 @@ const LabResultsPage: React.FC = () => {
                         <TableCell>
                           <div className="flex items-center gap-2 text-sm">
                             <Calendar className="h-4 w-4 text-muted-foreground" />
-                            {request.updatedAt || request.createdAt ? (
+                            {request.receptionDate ? (
+                              new Date(request.receptionDate).toLocaleDateString('fr-FR', {
+                                day: '2-digit',
+                                month: '2-digit',
+                                year: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              })
+                            ) : request.updatedAt || request.createdAt ? (
                               new Date(request.updatedAt || request.createdAt).toLocaleDateString('fr-FR', {
                                 day: '2-digit',
                                 month: '2-digit',
@@ -369,11 +437,22 @@ const LabResultsPage: React.FC = () => {
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => handlePrint(request.id, item.type)}
+                              onClick={() => handleDownloadPDF(request.id, item.type, `${patient.firstName} ${patient.lastName}`)}
+                              disabled={downloadingIds.has(request.id)}
                               className="gap-2"
                             >
-                              <Printer className="h-4 w-4" />
-                              Imprimer
+                              {downloadingIds.has(request.id) ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />}
+                              {downloadingIds.has(request.id) ? 'Téléchargement...' : 'PDF'}
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handlePrint(request.id, item.type)}
+                              disabled={printingIds.has(request.id)}
+                              className="gap-2"
+                            >
+                              {printingIds.has(request.id) ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4" />}
+                              {printingIds.has(request.id) ? 'Préparation...' : 'Imprimer'}
                             </Button>
                           </div>
                         </TableCell>
@@ -467,9 +546,9 @@ const LabResultsPage: React.FC = () => {
                         <p className="text-sm text-muted-foreground">{exam.category}</p>
                       )}
                     </div>
-                    {exam.price && (
+                    {(exam.amount != null || exam.price != null) && (
                       <Badge variant="outline" className="font-medium">
-                        {exam.price.toLocaleString()} GNF
+                        {(typeof exam.amount === 'string' ? parseFloat(exam.amount) : exam.amount ?? exam.price)?.toLocaleString('fr-FR', { minimumFractionDigits: 0 })} GNF
                       </Badge>
                     )}
                   </div>

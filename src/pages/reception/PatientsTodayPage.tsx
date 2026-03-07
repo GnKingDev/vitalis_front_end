@@ -55,6 +55,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { getReceptionPatients, exportReceptionPatients } from '@/services/api/receptionService';
 import { toast } from 'sonner';
+import { PatientInsuranceDiscount } from '@/components/shared/PatientInsuranceDiscount';
 
 const PatientsTodayPage: React.FC = () => {
   const { user } = useAuth();
@@ -73,7 +74,8 @@ const PatientsTodayPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
-  
+  const [stats, setStats] = useState<{ total: number; withPayment: number; assigned: number } | null>(null);
+
   const itemsPerPage = 10;
 
   // Charger les patients depuis l'API
@@ -89,10 +91,20 @@ const PatientsTodayPage: React.FC = () => {
         });
         
         if (response.success && response.data) {
-          setPatients(response.data.patients || response.data);
-          if (response.data.pagination) {
-            setTotalPages(response.data.pagination.totalPages || 1);
-            setTotalItems(response.data.pagination.totalItems || 0);
+          const data = response.data as any;
+          setPatients(data.patients || data);
+          if (data.pagination) {
+            setTotalPages(data.pagination.totalPages || 1);
+            setTotalItems(data.pagination.totalItems || 0);
+          }
+          if (data.stats && typeof data.stats === 'object') {
+            setStats({
+              total: data.stats.total ?? 0,
+              withPayment: data.stats.withPayment ?? 0,
+              assigned: data.stats.assigned ?? 0,
+            });
+          } else {
+            setStats(null);
           }
         }
       } catch (error: any) {
@@ -213,6 +225,23 @@ const PatientsTodayPage: React.FC = () => {
     }
   };
 
+  // Âge à partir de la date de naissance (pour affichage liste)
+  const getDisplayAge = (patient: Patient): string => {
+    const ageFromApi = (patient as any).age;
+    if (typeof ageFromApi === 'number' && !isNaN(ageFromApi)) return `${ageFromApi} ans`;
+    if (patient.dateOfBirth) {
+      const birth = new Date(patient.dateOfBirth);
+      if (!isNaN(birth.getTime())) {
+        const today = new Date();
+        let age = today.getFullYear() - birth.getFullYear();
+        const monthDiff = today.getMonth() - birth.getMonth();
+        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) age--;
+        return `${age} ans`;
+      }
+    }
+    return 'Âge non renseigné';
+  };
+
   const isToday = appliedDate === today;
   const isAllPatients = !appliedDate;
 
@@ -271,14 +300,16 @@ const PatientsTodayPage: React.FC = () => {
         </Button>
       </PageHeader>
 
-      {/* Statistiques rapides */}
+      {/* Statistiques rapides (priorité aux stats API si présentes) */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card>
           <CardContent className="py-4">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Total patients</p>
-                <p className="text-2xl font-bold">{totalItems || patients.length}</p>
+                <p className="text-2xl font-bold">
+                  {stats ? stats.total : (totalItems || patients.length)}
+                </p>
               </div>
               <Users className="h-8 w-8 text-primary opacity-50" />
             </div>
@@ -290,7 +321,7 @@ const PatientsTodayPage: React.FC = () => {
               <div>
                 <p className="text-sm text-muted-foreground">Paiements reçus</p>
                 <p className="text-2xl font-bold">
-                  {patients.filter((p) => getPatientPayment(p)?.status === 'paid').length}
+                  {stats ? stats.withPayment : patients.filter((p) => getPatientPayment(p)?.status === 'paid').length}
                 </p>
               </div>
               <Calendar className="h-8 w-8 text-success opacity-50" />
@@ -303,7 +334,7 @@ const PatientsTodayPage: React.FC = () => {
               <div>
                 <p className="text-sm text-muted-foreground">Assignés</p>
                 <p className="text-2xl font-bold">
-                  {patients.filter((p) => getPatientAssignment(p)).length}
+                  {stats ? stats.assigned : patients.filter((p) => getPatientAssignment(p)).length}
                 </p>
               </div>
               <User className="h-8 w-8 text-info opacity-50" />
@@ -484,31 +515,23 @@ const PatientsTodayPage: React.FC = () => {
                 <TableRow>
                   <TableHead>Patient</TableHead>
                   <TableHead>ID Vitalis</TableHead>
-                  <TableHead>Contact</TableHead>
-                  <TableHead>Paiement</TableHead>
+                  <TableHead>Assurance</TableHead>
+                  <TableHead>Remise</TableHead>
                   <TableHead>Médecin</TableHead>
-                  <TableHead>Heure</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {patients.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="h-24 text-center">
+                    <TableCell colSpan={6} className="h-24 text-center">
                       Aucun patient trouvé.
                     </TableCell>
                   </TableRow>
                 ) : (
                   patients.map((patient) => {
-                    const payment = getPatientPayment(patient);
                     const assignmentData = (patient as any).assignment;
                     const doctorName = assignmentData?.doctor?.name || 'Non assigné';
-                    const registrationTime = patient.createdAt && !isNaN(new Date(patient.createdAt).getTime())
-                      ? new Date(patient.createdAt).toLocaleTimeString('fr-FR', {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })
-                      : 'N/A';
 
                     return (
                       <TableRow key={patient.id}>
@@ -524,13 +547,7 @@ const PatientsTodayPage: React.FC = () => {
                                 {patient.firstName} {patient.lastName}
                               </p>
                               <p className="text-sm text-muted-foreground">
-                                {patient.gender === 'M' ? 'Homme' : 'Femme'} • {
-                                  patient.dateOfBirth && !isNaN(new Date(patient.dateOfBirth).getTime())
-                                    ? new Date(patient.dateOfBirth).toLocaleDateString('fr-FR')
-                                    : (patient as any).age 
-                                      ? `${(patient as any).age} ans`
-                                      : 'Âge non renseigné'
-                                }
+                                {patient.gender === 'M' ? 'Homme' : 'Femme'} • {getDisplayAge(patient)}
                               </p>
                             </div>
                           </div>
@@ -541,48 +558,13 @@ const PatientsTodayPage: React.FC = () => {
                           </Badge>
                         </TableCell>
                         <TableCell>
-                          <div className="space-y-1">
-                            <p className="text-sm flex items-center gap-1">
-                              <Phone className="h-3 w-3" />
-                              {patient.phone}
-                            </p>
-                            {patient.email && (
-                              <p className="text-sm flex items-center gap-1 text-muted-foreground">
-                                <Mail className="h-3 w-3" />
-                                {patient.email}
-                              </p>
-                            )}
-                          </div>
+                          <PatientInsuranceDiscount patient={patient} column="assurance" usePaymentPercent />
                         </TableCell>
                         <TableCell>
-                          {payment ? (
-                            <div>
-                              <Badge
-                                variant={payment.status === 'paid' ? 'default' : 'secondary'}
-                                className={
-                                  payment.status === 'paid'
-                                    ? 'bg-success text-success-foreground'
-                                    : ''
-                                }
-                              >
-                                {payment.status === 'paid' ? 'Payé' : 'En attente'}
-                              </Badge>
-                              <p className="text-sm text-muted-foreground mt-1">
-                                {typeof payment.amount === 'string' 
-                                  ? parseFloat(payment.amount).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-                                  : payment.amount.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-                                } GNF
-                              </p>
-                            </div>
-                          ) : (
-                            <span className="text-sm text-muted-foreground">-</span>
-                          )}
+                          <PatientInsuranceDiscount patient={patient} column="remise" usePaymentPercent />
                         </TableCell>
                         <TableCell>
                           <p className="text-sm">{doctorName}</p>
-                        </TableCell>
-                        <TableCell>
-                          <p className="text-sm text-muted-foreground">{registrationTime}</p>
                         </TableCell>
                         <TableCell className="text-right">
                           <Button
@@ -679,6 +661,7 @@ const PatientsTodayPage: React.FC = () => {
                     <Badge variant="outline" className="font-mono mt-1">
                       {selectedPatient.vitalisId}
                     </Badge>
+                    <PatientInsuranceDiscount patient={selectedPatient} variant="block" className="mt-2" />
                   </div>
                 </DialogTitle>
                 <DialogDescription>

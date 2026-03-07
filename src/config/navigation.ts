@@ -38,7 +38,7 @@ export const navigationItems: NavItem[] = [
     title: 'Assignation médecin',
     href: '/reception/assign',
     icon: 'UserCheck',
-    roles: ['reception'],
+    roles: ['admin', 'reception'],
   },
   
   // Doctor
@@ -106,16 +106,19 @@ export const navigationItems: NavItem[] = [
       { title: 'Tests Labo et Imagerie', href: '/admin/tests', icon: 'TestTube2', roles: ['admin'] },
       { title: 'Gestion des lits', href: '/admin/beds', icon: 'Bed', roles: ['admin'] },
       { title: 'Prix de consultation', href: '/admin/consultation-price', icon: 'DollarSign', roles: ['admin'] },
+      { title: 'Sociétés d\'assurance', href: '/admin/insurance-establishments', icon: 'ShieldCheck', roles: ['admin'] },
+      { title: 'Numéros Lab', href: '/admin/lab-numbers', icon: 'FlaskConical', roles: ['admin'] },
+      { title: 'Paiements pharmacie', href: '/pharmacy/payments', icon: 'CreditCard', roles: ['admin'] },
+      { title: 'Paiement labo et imagerie', href: '/reception/lab-payments', icon: 'FlaskConical', roles: ['admin'] },
     ],
   },
   
-  // Common
+  // Dossiers archivés (dernier menu)
   {
-    title: 'Dossiers patients',
-    href: '/patients',
-    icon: 'FolderOpen',
-    roles: ['admin', 'doctor', 'lab'],
-    // Note: reception can access but results are hidden
+    title: 'Dossiers archivés',
+    href: '/doctor/patients?status=archived',
+    icon: 'Archive',
+    roles: ['doctor'],
   },
 ];
 

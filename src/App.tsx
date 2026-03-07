@@ -32,6 +32,8 @@ import StatsPage from "./pages/admin/StatsPage";
 import TestsPage from "./pages/admin/TestsPage";
 import BedsPage from "./pages/admin/BedsPage";
 import ConsultationPricePage from "./pages/admin/ConsultationPricePage";
+import InsuranceEstablishmentsPage from "./pages/admin/InsuranceEstablishmentsPage";
+import LabNumbersPage from "./pages/admin/LabNumbersPage";
 import ChangePasswordPage from "./pages/ChangePasswordPage";
 import NotFound from "./pages/NotFound";
 import { useAuth } from "./contexts/AuthContext";
@@ -120,6 +122,8 @@ const App = () => (
               
               {/* Admin routes */}
               <Route path="/admin" element={<Navigate to="/admin/users" replace />} />
+              <Route path="/admin/insurance-establishments" element={<InsuranceEstablishmentsPage />} />
+              <Route path="/admin/lab-numbers" element={<LabNumbersPage />} />
               <Route path="/admin/users" element={<UsersPage />} />
               <Route path="/admin/stats" element={<StatsPage />} />
               <Route path="/admin/tests" element={<TestsPage />} />

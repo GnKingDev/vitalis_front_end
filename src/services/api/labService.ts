@@ -140,12 +140,12 @@ export const sendLabResult = async (id: string): Promise<any> => {
 };
 
 /**
- * Générer le PDF d'un résultat
+ * Générer le PDF d'un résultat de laboratoire (id = labRequestId)
  */
-export const getLabResultPDF = async (id: string): Promise<Blob> => {
+export const getLabRequestPDF = async (labRequestId: string): Promise<Blob> => {
   const { buildApiUrl, getDefaultHeaders } = await import('@/config/api');
   
-  const url = buildApiUrl(`/lab/results/${id}/pdf`);
+  const url = buildApiUrl(`/lab/requests/${labRequestId}/pdf`);
   const response = await fetch(url, {
     method: 'GET',
     headers: getDefaultHeaders(),

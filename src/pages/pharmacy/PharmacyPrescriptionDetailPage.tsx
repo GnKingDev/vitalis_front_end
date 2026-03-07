@@ -8,6 +8,16 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -48,6 +58,7 @@ const PharmacyPrescriptionDetailPage: React.FC = () => {
   const { user } = useAuth();
   const [selectedItemIds, setSelectedItemIds] = useState<string[]>([]);
   const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
+  const [confirmPaymentOpen, setConfirmPaymentOpen] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash');
   const [paymentReference, setPaymentReference] = useState('');
 
@@ -561,11 +572,40 @@ const PharmacyPrescriptionDetailPage: React.FC = () => {
             <Button variant="outline" onClick={() => setIsPaymentDialogOpen(false)}>
               Annuler
             </Button>
-            <Button onClick={handleConfirmPayment} className="gap-2">
+            <Button onClick={() => setConfirmPaymentOpen(true)} className="gap-2">
               <CreditCard className="h-4 w-4" />
               Confirmer le paiement
             </Button>
           </DialogFooter>
+
+          {/* Confirmation paiement pharmacie */}
+          <AlertDialog open={confirmPaymentOpen} onOpenChange={setConfirmPaymentOpen}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Confirmer le paiement</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Êtes-vous sûr de vouloir enregistrer ce paiement de{' '}
+                  <strong>{calculateSelectedTotal().toLocaleString()} GNF</strong> par{' '}
+                  <strong>{paymentMethod === 'cash' ? 'Espèces' : 'Orange Money'}</strong> ?
+                  Cette action mettra à jour le stock des médicaments.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Annuler</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setConfirmPaymentOpen(false);
+                    handleConfirmPayment();
+                  }}
+                  className="gap-2"
+                >
+                  <CreditCard className="h-4 w-4" />
+                  Confirmer le paiement
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </DialogContent>
       </Dialog>
     </div>
