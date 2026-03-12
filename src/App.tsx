@@ -12,6 +12,9 @@ import AssignDoctor from "./pages/reception/AssignDoctor";
 import PaymentsPage from "./pages/reception/PaymentsPage";
 import LabPaymentsPage from "./pages/reception/LabPaymentsPage";
 import PatientsTodayPage from "./pages/reception/PatientsTodayPage";
+import ArchiveDossierPage from "./pages/reception/ArchiveDossierPage";
+import AppointmentsPage from "./pages/reception/AppointmentsPage";
+import DoctorAppointmentsPage from "./pages/doctor/DoctorAppointmentsPage";
 import ConsultationPage from "./pages/doctor/ConsultationPage";
 import DoctorPatientsPage from "./pages/doctor/DoctorPatientsPage";
 import LabResultsPage from "./pages/doctor/LabResultsPage";
@@ -93,10 +96,13 @@ const App = () => (
               <Route path="/reception/payments" element={<PaymentsPage />} />
               <Route path="/reception/lab-payments" element={<LabPaymentsPage />} />
               <Route path="/reception/assign" element={<AssignDoctor />} />
+              <Route path="/reception/archive-dossier" element={<ArchiveDossierPage />} />
+              <Route path="/reception/appointments" element={<AppointmentsPage />} />
               
               {/* Doctor routes */}
               <Route path="/doctor" element={<Navigate to="/doctor/patients" replace />} />
               <Route path="/doctor/patients" element={<DoctorPatientsPage />} />
+              <Route path="/doctor/appointments" element={<DoctorAppointmentsPage />} />
               <Route path="/doctor/consultation" element={<ConsultationPage />} />
               <Route path="/doctor/lab-results" element={<DoctorLabResultsGuard />} />
               <Route path="/doctor/lab-results/:id" element={<ResultDetailPage />} />
@@ -131,6 +137,7 @@ const App = () => (
               <Route path="/admin/beds" element={<BedsPage />} />
               <Route path="/admin/consultation-price" element={<ConsultationPricePage />} />
               <Route path="/admin/consultation-types" element={<ConsultationTypesPage />} />
+              <Route path="/admin/appointments" element={<AppointmentsPage />} />
               <Route path="/admin/settings" element={<Dashboard />} />
               
               {/* Patients */}

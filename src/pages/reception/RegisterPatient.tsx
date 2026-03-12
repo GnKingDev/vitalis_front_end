@@ -176,9 +176,7 @@ const RegisterPatient: React.FC = () => {
         const typesResponse = await getConsultationTypes({ activeOnly: true });
         if (typesResponse.success && Array.isArray(typesResponse.data)) {
           setConsultationTypes(typesResponse.data);
-          if (typesResponse.data.length > 0 && selectedConsultationTypeIds.length === 0) {
-            setSelectedConsultationTypeIds(typesResponse.data.map((t) => t.id));
-          }
+          // Ne pas cocher les types de consultation par défaut : l'utilisateur choisit explicitement
         }
 
         // Load insurance establishments (actives only for selector)

@@ -4,7 +4,9 @@ import { StatusBadge } from '@/components/shared/StatusBadge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -56,6 +58,8 @@ import {
   updateAssignment,
 } from '@/services/api/receptionService';
 import { PatientInsuranceDiscount } from '@/components/shared/PatientInsuranceDiscount';
+import { DatePicker } from '@/components/ui/date-picker';
+import { TimePicker } from '@/components/ui/time-picker';
 
 const AssignDoctor: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -72,6 +76,9 @@ const AssignDoctor: React.FC = () => {
   const [isAssigning, setIsAssigning] = useState(false);
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
+  const [isAppointment, setIsAppointment] = useState(false);
+  const [appointmentDate, setAppointmentDate] = useState('');
+  const [appointmentTime, setAppointmentTime] = useState('');
   
   const itemsPerPage = 10;
 
@@ -271,11 +278,21 @@ const AssignDoctor: React.FC = () => {
         }
       } else {
         // Create new assignment
-        const response = await createAssignment({
+        if (isAppointment && (!appointmentDate || !appointmentTime)) {
+          toast.error('Veuillez indiquer la date et l\'heure du rendez-vous');
+          return;
+        }
+        const payload: any = {
           patientId: selectedPatient,
           doctorId: selectedDoctor,
           paymentId: payment.id,
-        });
+        };
+        if (isAppointment && appointmentDate && appointmentTime) {
+          payload.isAppointment = true;
+          payload.appointmentDate = appointmentDate;
+          payload.appointmentTime = appointmentTime;
+        }
+        const response = await createAssignment(payload);
 
         if (response.success) {
           toast.success(`Patient assigné à ${doctor?.name}`, {
@@ -319,6 +336,9 @@ const AssignDoctor: React.FC = () => {
 
   const openAssignDialog = (patientId: string) => {
     setSelectedPatient(patientId);
+    setIsAppointment(false);
+    setAppointmentDate('');
+    setAppointmentTime('');
     const patient = patients.find((p) => p.id === patientId);
     if (patient) {
       const currentAssignment = getCurrentAssignment(patient);
@@ -661,6 +681,50 @@ const AssignDoctor: React.FC = () => {
                   </SelectContent>
                 </Select>
               </div>
+
+              {/* Sur RDV (uniquement pour nouvelle assignation) */}
+              {selectedPatient && (() => {
+                const patient = patients.find((p) => p.id === selectedPatient);
+                const currentAssignment = patient ? getCurrentAssignment(patient) : null;
+                if (currentAssignment) return null;
+                return (
+                  <div className="space-y-3 pt-2 border-t">
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        id="is-appointment"
+                        checked={isAppointment}
+                        onCheckedChange={(c) => setIsAppointment(!!c)}
+                      />
+                      <Label htmlFor="is-appointment" className="text-sm font-medium cursor-pointer">
+                        Consultation sur rendez-vous
+                      </Label>
+                    </div>
+                    {isAppointment && (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pl-6">
+                        <div className="space-y-1">
+                          <Label className="text-xs">Date</Label>
+                          <DatePicker
+                            id="rdv-date"
+                            value={appointmentDate}
+                            onChange={setAppointmentDate}
+                            placeholder="Choisir la date"
+                            minDate={new Date()}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs">Heure</Label>
+                          <TimePicker
+                            id="rdv-time"
+                            value={appointmentTime}
+                            onChange={setAppointmentTime}
+                            placeholder="Choisir l'heure"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* Actions */}
               <div className="flex gap-3 pt-4">

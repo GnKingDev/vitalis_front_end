@@ -84,8 +84,16 @@ export const getPatientHistory = async (id: string): Promise<PatientHistoryRespo
 /**
  * Récupérer les dossiers d'un patient
  */
-export const getPatientDossiers = async (id: string): Promise<{ success: boolean; data: any[] }> => {
-  return api.get<{ success: boolean; data: any[] }>(`/patients/${id}/dossiers`);
+export const getPatientDossiers = async (
+  id: string,
+  params?: { page?: number; limit?: number; status?: string }
+): Promise<{ success: boolean; data: { dossiers?: any[] }; pagination?: any }> => {
+  const queryParams = new URLSearchParams();
+  if (params?.page) queryParams.append('page', params.page.toString());
+  if (params?.limit) queryParams.append('limit', params.limit.toString());
+  if (params?.status) queryParams.append('status', params.status);
+  const qs = queryParams.toString();
+  return api.get(`/patients/${id}/dossiers${qs ? `?${qs}` : ''}`);
 };
 
 /**

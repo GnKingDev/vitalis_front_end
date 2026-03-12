@@ -232,6 +232,10 @@ export const createAssignment = async (assignmentData: {
   patientId: string;
   doctorId: string;
   paymentId: string;
+  isAppointment?: boolean;
+  appointmentDate?: string;
+  appointmentTime?: string;
+  appointmentAt?: string;
 }): Promise<any> => {
   return api.post('/reception/assignments', assignmentData);
 };
@@ -314,6 +318,24 @@ export const getReceptionStats = async (date?: string): Promise<any> => {
   const queryString = queryParams.toString();
   const endpoint = queryString ? `/reception/stats?${queryString}` : '/reception/stats';
   
+  return api.get(endpoint);
+};
+
+/**
+ * Liste des dossiers archivés (réception)
+ */
+export const getArchivedDossiers = async (params?: {
+  page?: number;
+  limit?: number;
+  search?: string;
+}): Promise<any> => {
+  const queryParams = new URLSearchParams();
+  if (params?.page) queryParams.append('page', params.page.toString());
+  if (params?.limit) queryParams.append('limit', params.limit.toString());
+  if (params?.search) queryParams.append('search', params.search);
+
+  const queryString = queryParams.toString();
+  const endpoint = queryString ? `/reception/dossiers/archived?${queryString}` : '/reception/dossiers/archived';
   return api.get(endpoint);
 };
 

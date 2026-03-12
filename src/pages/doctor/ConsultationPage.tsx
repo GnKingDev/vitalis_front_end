@@ -54,6 +54,7 @@ import {
   Eye,
   Loader2,
   Trash2,
+  Calendar,
 } from 'lucide-react';
 import type { ConsultationDossier } from '@/types';
 import { getPatientById } from '@/services/api/patientsService';
@@ -64,7 +65,10 @@ import { getImagingExams } from '@/services/api/testsService';
 import { createLabRequest, getLabRequests } from '@/services/api/labService';
 import { createImagingRequest, getImagingRequests } from '@/services/api/imagingService';
 import { createDoctorPrescription, createDoctorCustomItem, getDoctorCustomItems, getCustomItemPDF, deleteDoctorCustomItem, getPrescriptionPDF, deletePrescriptionItem } from '@/services/api/doctorService';
+import { createDoctorAppointment, getDoctorAppointments } from '@/services/api/appointmentsService';
 import { useAuth } from '@/contexts/AuthContext';
+import { DatePicker } from '@/components/ui/date-picker';
+import { TimePicker } from '@/components/ui/time-picker';
 
 const ConsultationPage: React.FC = () => {
   const { user } = useAuth();
@@ -92,6 +96,14 @@ const ConsultationPage: React.FC = () => {
   const [confirmSaveOtherOpen, setConfirmSaveOtherOpen] = useState(false);
   const [customItemToDelete, setCustomItemToDelete] = useState<{ id: string; name: string } | null>(null);
   const [isDeletingCustomItem, setIsDeletingCustomItem] = useState(false);
+  const [rdvDate, setRdvDate] = useState('');
+  const [rdvTime, setRdvTime] = useState('');
+  const [rdvNotes, setRdvNotes] = useState('');
+  const [isCreatingRdv, setIsCreatingRdv] = useState(false);
+  const [doctorAppointments, setDoctorAppointments] = useState<any[]>([]);
+  const [loadingDoctorAppointments, setLoadingDoctorAppointments] = useState(false);
+  const [rdvListDate, setRdvListDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [rdvListKey, setRdvListKey] = useState(0);
 
   // Load patient
   useEffect(() => {
@@ -326,6 +338,28 @@ const ConsultationPage: React.FC = () => {
   }, [loadCustomItems]);
 
   const [activeTab, setActiveTab] = useState('consultation');
+
+  useEffect(() => {
+    if (activeTab !== 'rdv' || !user?.id) return;
+    let cancelled = false;
+    setLoadingDoctorAppointments(true);
+    getDoctorAppointments({
+      date: rdvListDate || undefined,
+      limit: 50,
+    })
+      .then((res) => {
+        if (cancelled) return;
+        const list = res?.data?.appointments ?? (Array.isArray(res?.data) ? res.data : []);
+        setDoctorAppointments(Array.isArray(list) ? list : []);
+      })
+      .catch(() => {
+        if (!cancelled) setDoctorAppointments([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingDoctorAppointments(false);
+      });
+    return () => { cancelled = true; };
+  }, [activeTab, user?.id, rdvListDate, rdvListKey]);
 
   const isArchivedDossier = currentDossier?.status === 'archived';
 
@@ -1115,7 +1149,7 @@ const ConsultationPage: React.FC = () => {
 
       {/* Consultation tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="grid w-full grid-cols-6">
           <TabsTrigger value="consultation" className="gap-2">
             <FileText className="h-4 w-4" />
             <span className="hidden sm:inline">Consultation</span>
@@ -1135,6 +1169,10 @@ const ConsultationPage: React.FC = () => {
           <TabsTrigger value="prescription" className="gap-2">
             <Pill className="h-4 w-4" />
             <span className="hidden sm:inline">Ordonnance</span>
+          </TabsTrigger>
+          <TabsTrigger value="rdv" className="gap-2">
+            <Calendar className="h-4 w-4" />
+            <span className="hidden sm:inline">Créer RDV</span>
           </TabsTrigger>
         </TabsList>
 
@@ -2039,6 +2077,148 @@ const ConsultationPage: React.FC = () => {
               </div>
             </CardContent>
           </Card>
+          )}
+        </TabsContent>
+
+        {/* Créer un rendez-vous */}
+        <TabsContent value="rdv" className="mt-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Calendar className="h-5 w-5 text-primary" />
+                Créer un rendez-vous pour ce patient
+              </CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Planifier un prochain rendez-vous. Le patient et l&apos;accueil pourront le voir dans la liste des RDV.
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {!selectedPatient?.id || !user?.id ? (
+                <p className="text-muted-foreground">Patient ou médecin non chargé.</p>
+              ) : (
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Date du rendez-vous</Label>
+                      <DatePicker
+                        value={rdvDate}
+                        onChange={setRdvDate}
+                        placeholder="Choisir la date"
+                        minDate={new Date()}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Heure</Label>
+                      <TimePicker
+                        value={rdvTime}
+                        onChange={setRdvTime}
+                        placeholder="Choisir l'heure"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Notes (optionnel)</Label>
+                    <Textarea
+                      placeholder="Motif ou rappel..."
+                      rows={2}
+                      value={rdvNotes}
+                      onChange={(e) => setRdvNotes(e.target.value)}
+                    />
+                  </div>
+                  <Button
+                    disabled={!rdvDate || !rdvTime || isCreatingRdv}
+                    onClick={async () => {
+                      if (!selectedPatient?.id || !user?.id) return;
+                      setIsCreatingRdv(true);
+                      try {
+                        const appointmentAt = new Date(`${rdvDate}T${rdvTime}:00`).toISOString();
+                        await createDoctorAppointment({
+                          patientId: selectedPatient.id,
+                          doctorId: user.id,
+                          appointmentAt,
+                          notes: rdvNotes.trim() || undefined,
+                        });
+                        toast.success('Rendez-vous créé');
+                        setRdvDate('');
+                        setRdvTime('');
+                        setRdvNotes('');
+                        setRdvListKey((k) => k + 1);
+                      } catch (e: any) {
+                        toast.error(e?.message || 'Erreur lors de la création du RDV');
+                      } finally {
+                        setIsCreatingRdv(false);
+                      }
+                    }}
+                    className="gap-2"
+                  >
+                    {isCreatingRdv ? <Loader2 className="h-4 w-4 animate-spin" /> : <Calendar className="h-4 w-4" />}
+                    Créer le rendez-vous
+                  </Button>
+                </>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Rendez-vous de ce patient */}
+          {user?.id && selectedPatient?.id && (
+            <Card className="mt-6">
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Calendar className="h-5 w-5 text-muted-foreground" />
+                  Rendez-vous de ce patient
+                </CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  Rendez-vous créés pour ce patient (avec vous). Filtrez par date.
+                </p>
+                <div className="pt-2 max-w-xs">
+                  <Label className="text-xs">Date</Label>
+                  <DatePicker
+                    value={rdvListDate}
+                    onChange={setRdvListDate}
+                    placeholder="Choisir la date"
+                  />
+                </div>
+              </CardHeader>
+              <CardContent>
+                {loadingDoctorAppointments ? (
+                  <div className="flex items-center justify-center py-8 gap-2 text-muted-foreground">
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                    Chargement...
+                  </div>
+                ) : (() => {
+                  const forPatient = doctorAppointments.filter(
+                    (a: any) => (a.patient?.id || a.patientId) === selectedPatient.id
+                  );
+                  if (forPatient.length === 0) {
+                    return <p className="text-muted-foreground py-4">Aucun rendez-vous pour ce patient à cette date.</p>;
+                  }
+                  return (
+                    <ul className="divide-y">
+                      {forPatient.map((a: any) => {
+                        const at = a.appointmentAt ? new Date(a.appointmentAt) : null;
+                        const status = a.status === 'scheduled' ? 'Prévu' : a.status === 'present' ? 'Présent' : a.status === 'absent' ? 'Absent' : a.status === 'cancelled' ? 'Annulé' : a.status || '–';
+                        return (
+                          <li key={a.id} className="py-3 flex flex-wrap items-center justify-between gap-2">
+                            <div className="flex items-center gap-2">
+                              <Clock className="h-4 w-4 text-muted-foreground" />
+                              {at && (
+                                <span className="font-medium">
+                                  {at.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' })} à{' '}
+                                  {at.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                              )}
+                            </div>
+                            <Badge variant={a.status === 'present' ? 'default' : a.status === 'absent' ? 'destructive' : 'secondary'}>
+                              {status}
+                            </Badge>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  );
+                })()}
+              </CardContent>
+            </Card>
           )}
         </TabsContent>
       </Tabs>

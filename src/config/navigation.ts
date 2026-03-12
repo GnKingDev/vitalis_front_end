@@ -40,12 +40,30 @@ export const navigationItems: NavItem[] = [
     icon: 'UserCheck',
     roles: ['admin', 'reception'],
   },
+  {
+    title: 'Archiver un dossier',
+    href: '/reception/archive-dossier',
+    icon: 'Archive',
+    roles: ['admin', 'reception'],
+  },
+  {
+    title: 'Rendez-vous',
+    href: '/reception/appointments',
+    icon: 'Calendar',
+    roles: ['reception'],
+  },
   
   // Doctor
   {
     title: 'Patients assignés',
     href: '/doctor/patients',
     icon: 'Users',
+    roles: ['doctor'],
+  },
+  {
+    title: 'Rendez-vous',
+    href: '/doctor/appointments',
+    icon: 'Calendar',
     roles: ['doctor'],
   },
   {
@@ -102,15 +120,18 @@ export const navigationItems: NavItem[] = [
     roles: ['admin'],
     children: [
       { title: 'Utilisateurs', href: '/admin/users', icon: 'Users', roles: ['admin'] },
-      { title: 'Statistiques', href: '/admin/stats', icon: 'BarChart3', roles: ['admin'] },
       { title: 'Tests Labo et Imagerie', href: '/admin/tests', icon: 'TestTube2', roles: ['admin'] },
       { title: 'Gestion des lits', href: '/admin/beds', icon: 'Bed', roles: ['admin'] },
       { title: 'Types de consultation', href: '/admin/consultation-types', icon: 'DollarSign', roles: ['admin'] },
       { title: 'Sociétés d\'assurance', href: '/admin/insurance-establishments', icon: 'ShieldCheck', roles: ['admin'] },
       { title: 'Numéros Lab', href: '/admin/lab-numbers', icon: 'FlaskConical', roles: ['admin'] },
-      { title: 'Paiements pharmacie', href: '/pharmacy/payments', icon: 'CreditCard', roles: ['admin'] },
-      { title: 'Paiement labo et imagerie', href: '/reception/lab-payments', icon: 'FlaskConical', roles: ['admin'] },
     ],
+  },
+  {
+    title: 'Rendez-vous',
+    href: '/admin/appointments',
+    icon: 'Calendar',
+    roles: ['admin'],
   },
   
   // Dossiers archivés (dernier menu)
