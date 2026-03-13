@@ -38,7 +38,7 @@ const AppointmentsPage: React.FC = () => {
   const [appointments, setAppointments] = useState<any[]>([]);
   const [doctors, setDoctors] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [dateFilter, setDateFilter] = useState(() => new Date().toISOString().split('T')[0]);
+  const [dateFilter, setDateFilter] = useState<string>('');
   const [doctorFilter, setDoctorFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
@@ -60,8 +60,12 @@ const AppointmentsPage: React.FC = () => {
           }),
           getReceptionDoctors(),
         ]);
-        if (appRes?.data?.appointments) setAppointments(appRes.data.appointments);
-        else setAppointments([]);
+        const list =
+          appRes?.data?.appointments ??
+          (Array.isArray(appRes?.data) ? appRes.data : null) ??
+          appRes?.appointments ??
+          [];
+        setAppointments(list);
         if (docRes?.data) {
           const list = Array.isArray(docRes.data) ? docRes.data : docRes.data.doctors || [];
           setDoctors(list);
@@ -131,7 +135,7 @@ const AppointmentsPage: React.FC = () => {
             <DatePicker
               value={dateFilter}
               onChange={setDateFilter}
-              placeholder="Choisir la date"
+              placeholder="Toutes les dates"
             />
           </div>
           <div className="space-y-2">

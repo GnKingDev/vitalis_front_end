@@ -50,7 +50,7 @@ export const navigationItems: NavItem[] = [
     title: 'Rendez-vous',
     href: '/reception/appointments',
     icon: 'Calendar',
-    roles: ['reception'],
+    roles: ['admin', 'reception'],
   },
   
   // Doctor

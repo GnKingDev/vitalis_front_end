@@ -14,9 +14,11 @@ import {
   Plus,
   ArrowRight,
   Phone,
+  Calendar,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { getReceptionStats, getReceptionPatients, getReceptionAssignments } from '@/services/api/receptionService';
+import { getAppointments } from '@/services/api/appointmentsService';
 import { toast } from 'sonner';
 import { PatientInsuranceDiscount } from '@/components/shared/PatientInsuranceDiscount';
 
@@ -29,6 +31,7 @@ const ReceptionDashboard: React.FC = () => {
   });
   const [patientsToday, setPatientsToday] = useState<any[]>([]);
   const [pendingAssignments, setPendingAssignments] = useState<any[]>([]);
+  const [appointmentsToday, setAppointmentsToday] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -37,26 +40,53 @@ const ReceptionDashboard: React.FC = () => {
         setIsLoading(true);
         const today = new Date().toISOString().split('T')[0];
         
-        // Charger les statistiques
+        // Charger les statistiques (accepter data ou stats au premier niveau)
         const statsData = await getReceptionStats(today);
-        if (statsData.success && statsData.data) {
-          setStats(statsData.data);
+        if (statsData?.success && (statsData.data != null || statsData.stats != null)) {
+          const raw = statsData.data ?? statsData.stats ?? statsData;
+          setStats({
+            patientsToday: raw.patientsToday ?? 0,
+            paymentsToday: raw.paymentsToday ?? 0,
+            pendingAssignments: raw.pendingAssignments ?? 0,
+          });
         }
 
-        // Charger les patients d'aujourd'hui
+        // Charger les patients d'aujourd'hui (plusieurs formats de réponse)
         const patientsResponse = await getReceptionPatients({ date: today, limit: 4 });
-        if (patientsResponse.success && patientsResponse.data) {
-          setPatientsToday(patientsResponse.data.patients || patientsResponse.data || []);
+        if (patientsResponse?.success) {
+          const data = patientsResponse.data;
+          const list =
+            (data && (data.patients ?? (Array.isArray(data) ? data : null))) ??
+            (patientsResponse as any).patients ??
+            [];
+          setPatientsToday(Array.isArray(list) ? list : []);
         }
 
-        // Charger les patients en attente d'assignation (payés, pas encore assignés à un médecin)
+        // Charger les patients en attente d'assignation (plusieurs formats de réponse)
         const assignmentsResponse = await getReceptionAssignments({ status: 'unassigned', limit: 20 });
-        if (assignmentsResponse.success && assignmentsResponse.data) {
-          const data = assignmentsResponse.data as { patients?: any[]; assignments?: any[] };
-          const list = data.patients ?? data.assignments ?? (Array.isArray(data) ? data : []);
+        if (assignmentsResponse?.success) {
+          const data = assignmentsResponse.data;
+          const list = Array.isArray(data)
+            ? data
+            : (data && typeof data === 'object' && (data.patients ?? data.assignments)) ??
+              (assignmentsResponse as any).patients ??
+              [];
           setPendingAssignments(Array.isArray(list) ? list : []);
         } else {
           setPendingAssignments([]);
+        }
+
+        // Charger les RDV du jour (aperçu)
+        const appRes = await getAppointments({ date: today, limit: 5 });
+        if (appRes?.success) {
+          const list =
+            appRes?.data?.appointments ??
+            (Array.isArray(appRes?.data) ? appRes.data : null) ??
+            (appRes as any)?.appointments ??
+            [];
+          setAppointmentsToday(Array.isArray(list) ? list : []);
+        } else {
+          setAppointmentsToday([]);
         }
       } catch (error: any) {
         console.error('Erreur lors du chargement des données:', error);
@@ -109,7 +139,7 @@ const ReceptionDashboard: React.FC = () => {
       </div>
 
       {/* Main content */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Queue / Waiting patients */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -206,6 +236,53 @@ const ReceptionDashboard: React.FC = () => {
                   </div>
                 </div>
               ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Rendez-vous du jour */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-lg font-semibold flex items-center gap-2">
+              <Calendar className="h-5 w-5 text-primary" />
+              Rendez-vous
+            </CardTitle>
+            <Button variant="ghost" size="sm" asChild>
+              <Link to="/reception/appointments" className="flex items-center gap-1">
+                Voir tout <ArrowRight className="h-4 w-4" />
+              </Link>
+            </Button>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {appointmentsToday.length === 0 ? (
+                <div className="text-center py-6 text-muted-foreground">
+                  <Calendar className="h-10 w-10 mx-auto mb-2 opacity-30" />
+                  <p className="text-sm">Aucun RDV aujourd&apos;hui</p>
+                </div>
+              ) : (
+                appointmentsToday.slice(0, 5).map((rdv: any) => (
+                  <div
+                    key={rdv.id}
+                    className="flex items-center justify-between p-3 rounded-lg bg-secondary/50 hover:bg-secondary transition-colors"
+                  >
+                    <div>
+                      <p className="font-medium text-sm">
+                        {rdv.patient ? `${rdv.patient.firstName || ''} ${rdv.patient.lastName || ''}`.trim() : '–'}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {rdv.appointmentAt
+                          ? new Date(rdv.appointmentAt).toLocaleTimeString('fr-FR', {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })
+                          : ''}
+                      </p>
+                    </div>
+                    <p className="text-xs text-muted-foreground">{rdv.doctor?.name || '–'}</p>
+                  </div>
+                ))
+              )}
             </div>
           </CardContent>
         </Card>
