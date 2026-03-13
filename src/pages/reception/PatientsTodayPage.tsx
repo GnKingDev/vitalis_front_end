@@ -177,7 +177,8 @@ const PatientsTodayPage: React.FC = () => {
 
   // Obtenir l'assignation du médecin pour un patient (depuis les données du patient)
   const getPatientAssignment = (patient: Patient) => {
-    // Les données d'assignation sont incluses dans la réponse API
+    const a = (patient as any).assignment;
+    if (a && a.doctor) return { doctorId: a.doctor.id, ...a };
     return (patient as any).assignedDoctorId ? { doctorId: (patient as any).assignedDoctorId } : null;
   };
 

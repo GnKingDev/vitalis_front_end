@@ -39,10 +39,10 @@ export const getLabRequestById = async (id: string): Promise<any> => {
 };
 
 /**
- * Récupérer les détails complets d'une demande
+ * Récupérer les détails complets d'une demande (même endpoint que getLabRequestById)
  */
 export const getLabRequestDetail = async (id: string): Promise<any> => {
-  return api.get(`/lab/requests/${id}/detail`);
+  return api.get(`/lab/requests/${id}`);
 };
 
 /**

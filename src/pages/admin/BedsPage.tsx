@@ -128,9 +128,10 @@ const BedsPage: React.FC = () => {
           : response.data.beds || response.data.data || [];
         setBeds(bedsData);
 
-        if (response.data.pagination) {
-          setTotalPages(response.data.pagination.totalPages || 1);
-          setTotalItems(response.data.pagination.totalItems || bedsData.length);
+        const pagination = response.pagination ?? response.data?.pagination;
+        if (pagination) {
+          setTotalPages(pagination.totalPages || 1);
+          setTotalItems(pagination.totalItems ?? bedsData.length);
         } else {
           setTotalPages(1);
           setTotalItems(bedsData.length);

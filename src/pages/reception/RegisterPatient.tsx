@@ -244,16 +244,14 @@ const RegisterPatient: React.FC = () => {
     return availableBeds.filter((bed) => bed.type === bedTypeFilter);
   }, [availableBeds, bedTypeFilter]);
 
-  // Montant de base (types de consultation sélectionnés + lit VIP)
+  // Montant de base : uniquement la somme des types de consultation sélectionnés (+ lit VIP éventuel)
   const consultationAmount = useMemo(() => {
-    if (selectedConsultationTypeIds.length > 0) {
-      return selectedConsultationTypeIds.reduce((sum, id) => {
-        const t = consultationTypes.find((c) => c.id === id);
-        return sum + (t ? Number(t.price) || 0 : 0);
-      }, 0);
-    }
-    return Number(consultationPrice) || 0;
-  }, [selectedConsultationTypeIds, consultationTypes, consultationPrice]);
+    if (selectedConsultationTypeIds.length === 0) return 0;
+    return selectedConsultationTypeIds.reduce((sum, id) => {
+      const t = consultationTypes.find((c) => c.id === id);
+      return sum + (t ? Number(t.price) || 0 : 0);
+    }, 0);
+  }, [selectedConsultationTypeIds, consultationTypes]);
 
   const baseAmount = useMemo(() => {
     const bed = selectedBed && selectedBed !== 'none' 

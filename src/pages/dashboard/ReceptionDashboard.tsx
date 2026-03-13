@@ -17,7 +17,6 @@ import {
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { getReceptionStats, getReceptionPatients, getReceptionAssignments } from '@/services/api/receptionService';
-import { getPayments } from '@/services/api/paymentsService';
 import { toast } from 'sonner';
 import { PatientInsuranceDiscount } from '@/components/shared/PatientInsuranceDiscount';
 
@@ -50,12 +49,12 @@ const ReceptionDashboard: React.FC = () => {
           setPatientsToday(patientsResponse.data.patients || patientsResponse.data || []);
         }
 
-        // Charger les assignations en attente
-        const assignmentsResponse = await getReceptionAssignments({ status: 'assigned' });
+        // Charger les patients en attente d'assignation (payés, pas encore assignés à un médecin)
+        const assignmentsResponse = await getReceptionAssignments({ status: 'unassigned', limit: 20 });
         if (assignmentsResponse.success && assignmentsResponse.data) {
-          // S'assurer que c'est toujours un tableau
-          const assignmentsData = assignmentsResponse.data.assignments || assignmentsResponse.data;
-          setPendingAssignments(Array.isArray(assignmentsData) ? assignmentsData : []);
+          const data = assignmentsResponse.data as { patients?: any[]; assignments?: any[] };
+          const list = data.patients ?? data.assignments ?? (Array.isArray(data) ? data : []);
+          setPendingAssignments(Array.isArray(list) ? list : []);
         } else {
           setPendingAssignments([]);
         }
@@ -130,12 +129,13 @@ const ReceptionDashboard: React.FC = () => {
                   <p>Aucun patient en attente</p>
                 </div>
               ) : (
-                pendingAssignments.map((assignment, index) => {
-                  const patient = assignment.patient || {};
-                  const doctor = assignment.doctor || {};
+                pendingAssignments.map((item: any, index: number) => {
+                  const patient = item.patient || item;
+                  const doctor = item.assignment?.doctor || item.doctor;
+                  const id = item.id || patient.id;
                   return (
                     <div
-                      key={assignment.id}
+                      key={id || index}
                       className="flex items-center justify-between p-4 rounded-lg bg-secondary/50 hover:bg-secondary transition-colors"
                     >
                       <div className="flex items-center gap-4">
@@ -152,7 +152,7 @@ const ReceptionDashboard: React.FC = () => {
                         </div>
                       </div>
                       <div className="text-right">
-                        <p className="text-sm font-medium">{doctor.name || 'Non assigné'}</p>
+                        <p className="text-sm font-medium">{doctor?.name || 'Non assigné'}</p>
                         <StatusBadge status="waiting" />
                       </div>
                     </div>

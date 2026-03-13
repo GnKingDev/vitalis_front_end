@@ -122,8 +122,6 @@ const DoctorPatientsPage: React.FC = () => {
               assignment: dossier.assignment,
             };
           }).filter((p: any) => p && p.id);
-          
-          console.log('Patients data loaded:', patientsData);
           setPatients(patientsData);
           
           if (response.data.pagination) {
@@ -141,31 +139,27 @@ const DoctorPatientsPage: React.FC = () => {
     loadPatients();
   }, [currentPage, appliedSearch, appliedStatusFilter, appliedDateFilter, user?.id]);
 
-  // Load consultations for all patients
+  // Load consultations for the doctor (backend accepts a single doctorId)
   useEffect(() => {
     const loadConsultations = async () => {
-      if (!user?.id || patients.length === 0) return;
-      
+      if (!user?.id) return;
       try {
-        const patientIds = patients.map((p: any) => p.id);
         const response = await getConsultations({
           doctorId: user.id,
-          patientId: patientIds.join(','), // Might need to adjust based on API
+          limit: 200,
         });
-        
         if (response.success && response.data) {
-          const consultationsData = Array.isArray(response.data) 
-            ? response.data 
-            : response.data.consultations || [];
+          const consultationsData = Array.isArray(response.data)
+            ? response.data
+            : (response.data as any).consultations || [];
           setConsultations(consultationsData);
         }
       } catch (error) {
         console.error('Erreur lors du chargement des consultations:', error);
       }
     };
-    
     loadConsultations();
-  }, [patients, user?.id]);
+  }, [user?.id]);
 
   // Synchroniser les filtres depuis l'URL quand elle change (ex: clic sur "Dossiers archivés")
   useEffect(() => {

@@ -41,10 +41,16 @@ const AdminDashboard: React.FC = () => {
         setIsLoading(true);
         const today = new Date().toISOString().split('T')[0];
         
-        // Charger les statistiques
+        // Charger les statistiques (backend renvoie { role, stats })
         const statsData = await getDashboardStats();
         if (statsData.success && statsData.data) {
-          setStats(statsData.data);
+          const s = statsData.data.stats ?? statsData.data;
+          setStats({
+            patientsToday: s.patients?.today ?? 0,
+            consultationsToday: s.consultations?.today ?? 0,
+            pendingLabRequests: s.lab?.pending ?? 0,
+            revenue: s.payments?.revenue?.today ?? 0,
+          });
         }
 
         // Charger les patients récents

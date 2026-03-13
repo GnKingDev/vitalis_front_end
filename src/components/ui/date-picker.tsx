@@ -67,8 +67,20 @@ export function DatePicker({
             }
           }}
           disabled={(d) => {
-            if (minDate && d < minDate) return true;
-            if (maxDate && d > maxDate) return true;
+            if (minDate) {
+              const minDay = new Date(minDate);
+              minDay.setHours(0, 0, 0, 0);
+              const dDay = new Date(d);
+              dDay.setHours(0, 0, 0, 0);
+              if (dDay < minDay) return true;
+            }
+            if (maxDate) {
+              const maxDay = new Date(maxDate);
+              maxDay.setHours(0, 0, 0, 0);
+              const dDay = new Date(d);
+              dDay.setHours(0, 0, 0, 0);
+              if (dDay > maxDay) return true;
+            }
             return false;
           }}
           initialFocus

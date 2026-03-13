@@ -22,8 +22,7 @@ const statusConfig: Record<StatusType, { label: string; className: string }> = {
   in_progress: { label: 'En cours', className: 'badge-active' },
   completed: { label: 'Terminé', className: 'badge-completed' },
   
-  // Lab Request
-  pending: { label: 'En attente', className: 'badge-pending' },
+  // Lab Request (pending réutilise la config ci-dessus)
   sent_to_doctor: { label: 'Fini et envoyé au médecin', className: 'badge-completed' },
   
   // Prescription
