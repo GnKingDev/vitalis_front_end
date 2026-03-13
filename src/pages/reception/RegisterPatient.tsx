@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { Stepper, Step } from '@/components/shared/Stepper';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -48,6 +48,7 @@ import {
   Clock,
   ShieldCheck,
   Percent,
+  FlaskConical,
 } from 'lucide-react';
 import type { Patient, Bed } from '@/types';
 import { 
@@ -63,6 +64,8 @@ import { getConsultationTypes, type ConsultationTypeItem } from '@/services/api/
 import { getPatients } from '@/services/api/patientsService';
 import { getInsuranceEstablishments } from '@/services/api/insuranceEstablishmentsService';
 import type { InsuranceEstablishment } from '@/services/api/insuranceEstablishmentsService';
+import { DatePicker } from '@/components/ui/date-picker';
+import { TimePicker } from '@/components/ui/time-picker';
 
 const steps: Step[] = [
   { id: 1, title: 'Paiement', description: 'Consultation', icon: CreditCard },
@@ -98,6 +101,9 @@ const RegisterPatient: React.FC = () => {
     setSelectedBed('none');
     setBedTypeFilter('all');
     setInsuranceData({ isInsured: false, establishmentId: '', coveragePercent: 0, memberNumber: '' });
+    setIsAppointment(false);
+    setAppointmentDate('');
+    setAppointmentTime('');
     setDiscountData({ hasDiscount: false, discountPercent: 0 });
   }, [activeTab]);
 
@@ -148,6 +154,9 @@ const RegisterPatient: React.FC = () => {
 
   // Assignment data
   const [selectedDoctor, setSelectedDoctor] = useState('');
+  const [isAppointment, setIsAppointment] = useState(false);
+  const [appointmentDate, setAppointmentDate] = useState('');
+  const [appointmentTime, setAppointmentTime] = useState('');
 
   // Load available beds, consultation price and insurance establishments (actives only)
   useEffect(() => {
@@ -595,6 +604,10 @@ const RegisterPatient: React.FC = () => {
         toast.error('Veuillez sélectionner un médecin');
         return;
       }
+      if (isAppointment && (!appointmentDate || !appointmentTime)) {
+        toast.error('Veuillez indiquer la date et l\'heure du rendez-vous');
+        return;
+      }
 
       const patientId = activeTab === 'existing' ? existingPatient?.id : createdPatientId;
       if (!patientId) {
@@ -630,6 +643,9 @@ const RegisterPatient: React.FC = () => {
         patientId,
         doctorId: selectedDoctor,
         paymentId: createdPaymentId,
+        ...(isAppointment && appointmentDate && appointmentTime
+          ? { isAppointment: true, appointmentDate, appointmentTime }
+          : {}),
       });
       if (assignmentResponse.success) {
         const doctor = doctors.find((d) => d.id === selectedDoctor);
@@ -654,8 +670,15 @@ const RegisterPatient: React.FC = () => {
     <div className="space-y-6 max-w-4xl mx-auto">
       <PageHeader
         title="Enregistrer un patient"
-        description="Paiement de consultation et assignation médecin"
-      />
+        description="Paiement de consultation et assignation médecin. Option RDV à l'étape 3."
+      >
+        <Button variant="outline" size="sm" asChild>
+          <Link to="/reception/lab-payments" className="gap-2">
+            <FlaskConical className="h-4 w-4" />
+            Paiement labo et imagerie
+          </Link>
+        </Button>
+      </PageHeader>
 
       {/* Stepper - Dynamic based on tab and patient type */}
       <Card>
@@ -1639,6 +1662,41 @@ const RegisterPatient: React.FC = () => {
                   ))}
                 </RadioGroup>
               )}
+
+              {/* Consultation sur rendez-vous */}
+              <div className="space-y-3 pt-4 border-t mt-4">
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="is-appointment-register"
+                    checked={isAppointment}
+                    onCheckedChange={(c) => setIsAppointment(!!c)}
+                  />
+                  <Label htmlFor="is-appointment-register" className="text-sm font-medium cursor-pointer">
+                    Consultation sur rendez-vous
+                  </Label>
+                </div>
+                {isAppointment && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pl-6">
+                    <div className="space-y-1">
+                      <Label className="text-xs">Date</Label>
+                      <DatePicker
+                        value={appointmentDate}
+                        onChange={setAppointmentDate}
+                        placeholder="Choisir la date"
+                        minDate={new Date()}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Heure</Label>
+                      <TimePicker
+                        value={appointmentTime}
+                        onChange={setAppointmentTime}
+                        placeholder="Choisir l'heure"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </CardContent>
         </Card>
