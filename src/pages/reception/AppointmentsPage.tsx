@@ -11,6 +11,24 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from '@/components/ui/pagination';
 import { toast } from 'sonner';
 import { Calendar, User, Stethoscope, Loader2, Check, X, Search } from 'lucide-react';
 import { DatePicker } from '@/components/ui/date-picker';
@@ -46,17 +64,24 @@ const AppointmentsPage: React.FC = () => {
   const [detailId, setDetailId] = useState<string | null>(null);
   const [detail, setDetail] = useState<any | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
+  const [confirmStatus, setConfirmStatus] = useState<{ id: string; status: 'present' | 'absent'; patientName: string } | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
+  const itemsPerPage = 10;
 
   useEffect(() => {
     (async () => {
       try {
+        setIsLoading(true);
         const [appRes, docRes] = await Promise.all([
           getAppointments({
+            page: currentPage,
+            limit: itemsPerPage,
             date: dateFilter || undefined,
             doctorId: doctorFilter || undefined,
             status: statusFilter || undefined,
             search: searchQuery.trim() || undefined,
-            limit: 100,
           }),
           getReceptionDoctors(),
         ]);
@@ -66,9 +91,17 @@ const AppointmentsPage: React.FC = () => {
           appRes?.appointments ??
           [];
         setAppointments(list);
+        const pagination = (appRes as any)?.pagination ?? (appRes as any)?.data?.pagination;
+        if (pagination) {
+          setTotalPages(pagination.totalPages ?? 1);
+          setTotalItems(pagination.totalItems ?? list.length);
+        } else {
+          setTotalPages(1);
+          setTotalItems(list.length);
+        }
         if (docRes?.data) {
-          const list = Array.isArray(docRes.data) ? docRes.data : docRes.data.doctors || [];
-          setDoctors(list);
+          const docList = Array.isArray(docRes.data) ? docRes.data : docRes.data.doctors || [];
+          setDoctors(docList);
         }
       } catch (e) {
         console.error(e);
@@ -78,6 +111,10 @@ const AppointmentsPage: React.FC = () => {
         setIsLoading(false);
       }
     })();
+  }, [currentPage, dateFilter, doctorFilter, statusFilter, searchQuery]);
+
+  useEffect(() => {
+    setCurrentPage(1);
   }, [dateFilter, doctorFilter, statusFilter, searchQuery]);
 
   useEffect(() => {
@@ -101,6 +138,7 @@ const AppointmentsPage: React.FC = () => {
   }, [detailId]);
 
   const handleStatus = async (id: string, status: 'present' | 'absent') => {
+    setConfirmStatus(null);
     setUpdatingId(id);
     try {
       await updateAppointmentStatus(id, status);
@@ -242,7 +280,13 @@ const AppointmentsPage: React.FC = () => {
                               variant="outline"
                               className="gap-1"
                               disabled={updatingId === a.id}
-                              onClick={() => handleStatus(a.id, 'present')}
+                              onClick={() =>
+                                setConfirmStatus({
+                                  id: a.id,
+                                  status: 'present',
+                                  patientName: a.patient ? `${a.patient.firstName || ''} ${a.patient.lastName || ''}`.trim() || 'Ce patient' : 'Ce patient',
+                                })
+                              }
                             >
                               {updatingId === a.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
                               Présent
@@ -252,7 +296,13 @@ const AppointmentsPage: React.FC = () => {
                               variant="outline"
                               className="gap-1 text-destructive hover:text-destructive"
                               disabled={updatingId === a.id}
-                              onClick={() => handleStatus(a.id, 'absent')}
+                              onClick={() =>
+                                setConfirmStatus({
+                                  id: a.id,
+                                  status: 'absent',
+                                  patientName: a.patient ? `${a.patient.firstName || ''} ${a.patient.lastName || ''}`.trim() || 'Ce patient' : 'Ce patient',
+                                })
+                              }
                             >
                               <X className="h-3 w-3" />
                               Absent
@@ -264,6 +314,50 @@ const AppointmentsPage: React.FC = () => {
                   ))}
                 </tbody>
               </table>
+            </div>
+          )}
+          {!isLoading && appointments.length > 0 && totalPages > 0 && (
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-4 py-3 border-t">
+              <p className="text-sm text-muted-foreground">
+                Affichage de {(currentPage - 1) * itemsPerPage + 1} à{' '}
+                {Math.min(currentPage * itemsPerPage, totalItems)} sur {totalItems} rendez-vous
+              </p>
+              <Pagination>
+                <PaginationContent>
+                  <PaginationItem>
+                    <PaginationPrevious
+                      onClick={() => currentPage > 1 && setCurrentPage(currentPage - 1)}
+                      className={currentPage === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                      aria-disabled={currentPage === 1}
+                    />
+                  </PaginationItem>
+                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                    let pageNum: number;
+                    if (totalPages <= 5) pageNum = i + 1;
+                    else if (currentPage <= 3) pageNum = i + 1;
+                    else if (currentPage >= totalPages - 2) pageNum = totalPages - 4 + i;
+                    else pageNum = currentPage - 2 + i;
+                    return (
+                      <PaginationItem key={pageNum}>
+                        <PaginationLink
+                          onClick={() => setCurrentPage(pageNum)}
+                          isActive={currentPage === pageNum}
+                          className="cursor-pointer"
+                        >
+                          {pageNum}
+                        </PaginationLink>
+                      </PaginationItem>
+                    );
+                  })}
+                  <PaginationItem>
+                    <PaginationNext
+                      onClick={() => currentPage < totalPages && setCurrentPage(currentPage + 1)}
+                      className={currentPage === totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                      aria-disabled={currentPage === totalPages}
+                    />
+                  </PaginationItem>
+                </PaginationContent>
+              </Pagination>
             </div>
           )}
         </CardContent>
@@ -287,6 +381,30 @@ const AppointmentsPage: React.FC = () => {
           ) : null}
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={!!confirmStatus} onOpenChange={(open) => !open && setConfirmStatus(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {confirmStatus?.status === 'present' ? 'Confirmer la présence' : 'Confirmer l\'absence'}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmStatus?.status === 'present'
+                ? `Confirmer que ${confirmStatus?.patientName || 'ce patient'} est bien présent ?`
+                : `Confirmer que ${confirmStatus?.patientName || 'ce patient'} est absent ?`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annuler</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => confirmStatus && handleStatus(confirmStatus.id, confirmStatus.status)}
+              className={confirmStatus?.status === 'absent' ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90' : ''}
+            >
+              Confirmer
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
