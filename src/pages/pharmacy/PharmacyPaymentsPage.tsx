@@ -666,7 +666,7 @@ const PharmacyPaymentsPage: React.FC = () => {
                             </div>
                           </div>
                           <Badge variant="outline" className="font-medium">
-                            {product.price.toLocaleString()} GNF
+                            {NumberNumber(product.price).toLocaleString()} GNF
                           </Badge>
                         </div>
                       </div>
@@ -688,7 +688,7 @@ const PharmacyPaymentsPage: React.FC = () => {
                         <div className="flex-1">
                           <p className="font-medium text-sm">{item.product.name}</p>
                           <p className="text-xs text-muted-foreground">
-                            {item.product.price.toLocaleString()} GNF / {item.product.unit}
+                            {NumberNumber(item.product.price).toLocaleString()} GNF / {item.product.unit}
                           </p>
                         </div>
                         <div className="flex items-center gap-3">
@@ -713,7 +713,7 @@ const PharmacyPaymentsPage: React.FC = () => {
                             </Button>
                           </div>
                           <span className="font-medium w-24 text-right">
-                            {(item.product.price * item.quantity).toLocaleString()} GNF
+                            {Number(item.product.price * item.quantity).toLocaleString()} GNF
                           </span>
                           <Button
                             variant="ghost"
@@ -735,20 +735,20 @@ const PharmacyPaymentsPage: React.FC = () => {
                 <div className="p-4 bg-primary/5 rounded-lg border border-primary/20 space-y-2">
                   <div className="flex items-center justify-between">
                     <span className="text-muted-foreground">Montant de base</span>
-                    <span>{totalAmount.toLocaleString()} GNF</span>
+                    <span>{NumberNumber(totalAmount).toLocaleString()} GNF</span>
                   </div>
                   {(insuranceDeduction > 0 || discountDeduction > 0) && (
                     <>
                       {insuranceDeduction > 0 && (
                         <div className="flex items-center justify-between text-sm text-muted-foreground">
                           <span>Déduction assurance</span>
-                          <span>-{insuranceDeduction.toLocaleString()} GNF</span>
+                          <span>-{NumberNumber(insuranceDeduction).toLocaleString()} GNF</span>
                         </div>
                       )}
                       {discountDeduction > 0 && (
                         <div className="flex items-center justify-between text-sm text-muted-foreground">
                           <span>Déduction remise</span>
-                          <span>-{discountDeduction.toLocaleString()} GNF</span>
+                          <span>-{NumberNumber(discountDeduction).toLocaleString()} GNF</span>
                         </div>
                       )}
                     </>
@@ -756,7 +756,7 @@ const PharmacyPaymentsPage: React.FC = () => {
                   <div className="flex items-center justify-between pt-2 border-t">
                     <span className="text-lg font-semibold">Montant à payer</span>
                     <span className="text-2xl font-bold text-primary">
-                      {finalAmount.toLocaleString()} GNF
+                      {NumberNumber(finalAmount).toLocaleString()} GNF
                     </span>
                   </div>
                 </div>

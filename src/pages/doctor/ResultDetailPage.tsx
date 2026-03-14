@@ -427,7 +427,7 @@ const ResultDetailPage: React.FC = () => {
                         <p className="text-sm text-muted-foreground">{exam.category}</p>
                       </div>
                       <Badge variant="outline" className="font-medium">
-                        {exam.price.toLocaleString()} GNF
+                        {Number(exam.price).toLocaleString()} GNF
                       </Badge>
                     </div>
                   </div>

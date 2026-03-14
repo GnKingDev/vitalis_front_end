@@ -233,7 +233,7 @@ const StatsPage: React.FC = () => {
         />
         <StatsCard
           title="Revenus Total"
-          value={`${stats.payments.revenue.total.toLocaleString()} GNF`}
+          value={`${NumberNumber(stats.payments.revenue.total).toLocaleString()} GNF`}
           icon={DollarSign}
           variant="default"
         />
@@ -281,7 +281,7 @@ const StatsPage: React.FC = () => {
                   {!selectedDate ? 'Revenus (toutes périodes)' : selectedDate === today ? 'Revenus aujourd\'hui' : `Revenus le ${new Date(selectedDate).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })}`}
                 </p>
                 <p className="text-2xl font-bold text-success">
-                  {(stats.payments.revenue.today || 0).toLocaleString()} GNF
+                  {Number(stats.payments.revenue.today || 0).toLocaleString()} GNF
                 </p>
               </div>
               <DollarSign className="h-8 w-8 text-success opacity-50" />
@@ -421,19 +421,19 @@ const StatsPage: React.FC = () => {
               <div className="flex items-center justify-between p-3 rounded-lg bg-secondary/50">
                 <span className="text-sm text-muted-foreground">Revenus total</span>
                 <span className="text-lg font-semibold text-success">
-                  {(stats.payments.revenue.total || 0).toLocaleString()} GNF
+                  {Number(stats.payments.revenue.total || 0).toLocaleString()} GNF
                 </span>
               </div>
               <div className="flex items-center justify-between p-3 rounded-lg bg-secondary/50">
                 <span className="text-sm text-muted-foreground">Revenus aujourd'hui</span>
                 <span className="text-lg font-semibold text-success">
-                  {(stats.payments.revenue.today || 0).toLocaleString()} GNF
+                  {Number(stats.payments.revenue.today || 0).toLocaleString()} GNF
                 </span>
               </div>
               <div className="flex items-center justify-between p-3 rounded-lg bg-secondary/50">
                 <span className="text-sm text-muted-foreground">Revenus ce mois</span>
                 <span className="text-lg font-semibold text-success">
-                  {(stats.payments.revenue.thisMonth || 0).toLocaleString()} GNF
+                  {Number(stats.payments.revenue.thisMonth || 0).toLocaleString()} GNF
                 </span>
               </div>
             </div>

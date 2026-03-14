@@ -485,17 +485,11 @@ const ConsultationPage: React.FC = () => {
   const [itemToDelete, setItemToDelete] = useState<{ id: string; medication: string } | null>(null);
   const [isDeletingItem, setIsDeletingItem] = useState(false);
 
-  // Format price function (with dots as thousand separators)
+  // Format price function
   const formatPrice = (price: number | string): string => {
     const numPrice = typeof price === 'string' ? parseFloat(price) : price;
-    if (isNaN(numPrice)) return '0,00 GNF';
-    // Format: convert to string, add thousand separators with dots
-    const parts = numPrice.toFixed(2).split('.');
-    const integerPart = parts[0];
-    const decimalPart = parts[1];
-    // Add dots every 3 digits from right to left
-    const formattedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-    return `${formattedInteger},${decimalPart} GNF`;
+    if (isNaN(numPrice)) return '0 GNF';
+    return `${Number(numPrice).toLocaleString()} GNF`;
   };
 
   const handleSaveConsultation = async () => {

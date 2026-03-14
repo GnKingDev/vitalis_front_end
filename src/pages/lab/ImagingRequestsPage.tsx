@@ -370,7 +370,7 @@ const ImagingRequestsPage: React.FC = () => {
                         </TableCell>
                         <TableCell>
                           <p className="font-semibold">
-                            {(request.totalAmount || 0).toLocaleString()} GNF
+                            {Number(request.totalAmount || 0).toLocaleString()} GNF
                           </p>
                         </TableCell>
                         <TableCell>

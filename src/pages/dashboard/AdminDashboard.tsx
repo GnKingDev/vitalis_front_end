@@ -135,7 +135,7 @@ const AdminDashboard: React.FC = () => {
         />
         <StatsCard
           title="Revenus du jour"
-          value={`${(stats.revenue || 0).toLocaleString()} GNF`}
+          value={`${Number(stats.revenue || 0).toLocaleString()} GNF`}
           icon={CreditCard}
           variant="default"
           trend={{ value: 15, isPositive: true }}

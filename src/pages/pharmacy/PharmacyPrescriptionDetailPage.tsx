@@ -185,7 +185,7 @@ const PharmacyPrescriptionDetailPage: React.FC = () => {
       prescription.status = 'preparing';
     }
 
-    toast.success(`Paiement de ${totalAmount.toLocaleString()} GNF enregistré avec succès`);
+    toast.success(`Paiement de ${NumberNumber(totalAmount).toLocaleString()} GNF enregistré avec succès`);
     
     // Fermer le dialog et retourner à la liste
     setIsPaymentDialogOpen(false);
@@ -391,7 +391,7 @@ const PharmacyPrescriptionDetailPage: React.FC = () => {
                         <div className="flex items-center justify-between w-full">
                           <span>{item.medicationName}</span>
                           <span className="ml-4 text-sm text-muted-foreground">
-                            {product && `${(product.price * item.quantity).toLocaleString()} GNF`}
+                            {product && `${Number(product.price * item.quantity).toLocaleString()} GNF`}
                           </span>
                         </div>
                       </SelectItem>
@@ -446,12 +446,12 @@ const PharmacyPrescriptionDetailPage: React.FC = () => {
                                 <>
                                   <p className="text-sm text-muted-foreground">Prix unitaire</p>
                                   <p className="font-semibold">
-                                    {product.price.toLocaleString()} GNF / {product.unit}
+                                    {NumberNumber(product.price).toLocaleString()} GNF / {product.unit}
                                   </p>
                                   <div className="mt-2 pt-2 border-t">
                                     <p className="text-sm text-muted-foreground">Total</p>
                                     <p className="font-bold text-lg text-primary">
-                                      {(product.price * item.quantity).toLocaleString()} GNF
+                                      {Number(product.price * item.quantity).toLocaleString()} GNF
                                     </p>
                                   </div>
                                 </>
@@ -488,7 +488,7 @@ const PharmacyPrescriptionDetailPage: React.FC = () => {
                 </div>
                 <div className="text-right">
                   <p className="text-3xl font-bold text-primary">
-                    {calculateSelectedTotal().toLocaleString()} GNF
+                    {Number(calculateSelectedTotal()).toLocaleString()} GNF
                   </p>
                 </div>
               </div>
@@ -538,7 +538,7 @@ const PharmacyPrescriptionDetailPage: React.FC = () => {
             <div>
               <Label>Montant total</Label>
               <div className="mt-1 text-2xl font-bold text-primary">
-                {calculateSelectedTotal().toLocaleString()} GNF
+                {Number(calculateSelectedTotal()).toLocaleString()} GNF
               </div>
             </div>
 
@@ -585,7 +585,7 @@ const PharmacyPrescriptionDetailPage: React.FC = () => {
                 <AlertDialogTitle>Confirmer le paiement</AlertDialogTitle>
                 <AlertDialogDescription>
                   Êtes-vous sûr de vouloir enregistrer ce paiement de{' '}
-                  <strong>{calculateSelectedTotal().toLocaleString()} GNF</strong> par{' '}
+                  <strong>{Number(calculateSelectedTotal()).toLocaleString()} GNF</strong> par{' '}
                   <strong>{paymentMethod === 'cash' ? 'Espèces' : 'Orange Money'}</strong> ?
                   Cette action mettra à jour le stock des médicaments.
                 </AlertDialogDescription>

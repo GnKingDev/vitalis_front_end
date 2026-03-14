@@ -780,7 +780,7 @@ const RegisterPatient: React.FC = () => {
                   </div>
                   <div className="text-right">
                     <p className="text-2xl font-bold text-primary">
-                      {totalAmount.toLocaleString()} GNF
+                      {Number(totalAmount).toLocaleString()} GNF
                     </p>
                     <p className="text-sm text-muted-foreground">
                       {selectedBed ? 'Consultation + Lit' : 'Consultation'}
@@ -977,7 +977,7 @@ const RegisterPatient: React.FC = () => {
                           const bed = availableBeds.find((b) => b.id === selectedBed);
                           const fee = Number(bed?.additionalFee) || 0;
                           return fee > 0 ? (
-                            <p className="font-semibold text-primary">+{fee.toLocaleString()} GNF</p>
+                            <p className="font-semibold text-primary">+{Number(fee).toLocaleString()} GNF</p>
                           ) : bed ? (
                             <p className="font-semibold text-success">Gratuit</p>
                           ) : null;
@@ -991,7 +991,7 @@ const RegisterPatient: React.FC = () => {
                 <div className="border-t pt-4 space-y-2">
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-muted-foreground">Consultation(s)</span>
-                    <span className="font-medium">{consultationAmount.toLocaleString()} GNF</span>
+                    <span className="font-medium">{Number(consultationAmount).toLocaleString()} GNF</span>
                   </div>
                   {selectedBed && selectedBed !== 'none' && (
                     <div className="flex items-center justify-between text-sm">
@@ -1009,18 +1009,18 @@ const RegisterPatient: React.FC = () => {
                   {insuranceDeduction > 0 && (
                     <div className="flex items-center justify-between text-sm text-success">
                       <span className="text-muted-foreground">Déduction assurance ({insuranceData.coveragePercent}%)</span>
-                      <span className="font-medium">-{insuranceDeduction.toLocaleString()} GNF</span>
+                      <span className="font-medium">-{Number(insuranceDeduction).toLocaleString()} GNF</span>
                     </div>
                   )}
                   {discountDeduction > 0 && (
                     <div className="flex items-center justify-between text-sm text-success">
                       <span className="text-muted-foreground">Remise ({discountData.discountPercent}%)</span>
-                      <span className="font-medium">-{discountDeduction.toLocaleString()} GNF</span>
+                      <span className="font-medium">-{Number(discountDeduction).toLocaleString()} GNF</span>
                     </div>
                   )}
                   <div className="flex items-center justify-between pt-2 border-t font-semibold text-lg">
                     <span>Total à payer</span>
-                    <span className="text-primary">{totalAmount.toLocaleString()} GNF</span>
+                    <span className="text-primary">{Number(totalAmount).toLocaleString()} GNF</span>
                   </div>
                 </div>
 
@@ -1233,7 +1233,7 @@ const RegisterPatient: React.FC = () => {
                 </div>
                 <div className="text-right">
                   <p className="text-2xl font-bold text-primary">
-                    {totalAmount.toLocaleString()} GNF
+                    {Number(totalAmount).toLocaleString()} GNF
                   </p>
                   <p className="text-sm text-muted-foreground">
                     {selectedBed ? 'Consultation + Lit' : 'Consultation'}
@@ -1432,7 +1432,7 @@ const RegisterPatient: React.FC = () => {
                         return fee === 0 && bed ? (
                           <p className="font-semibold text-success">Gratuit</p>
                         ) : fee > 0 ? (
-                          <p className="font-semibold text-primary">+{fee.toLocaleString()} GNF</p>
+                          <p className="font-semibold text-primary">+{Number(fee).toLocaleString()} GNF</p>
                         ) : null;
                       })()}
                     </div>
@@ -1444,7 +1444,7 @@ const RegisterPatient: React.FC = () => {
                 <div className="border-t pt-4 space-y-2">
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-muted-foreground">Consultation(s)</span>
-                    <span className="font-medium">{consultationAmount.toLocaleString()} GNF</span>
+                    <span className="font-medium">{Number(consultationAmount).toLocaleString()} GNF</span>
                   </div>
                   {selectedBed && selectedBed !== 'none' && (
                     <div className="flex items-center justify-between text-sm">
@@ -1462,18 +1462,18 @@ const RegisterPatient: React.FC = () => {
                   {insuranceDeduction > 0 && (
                     <div className="flex items-center justify-between text-sm text-success">
                       <span className="text-muted-foreground">Déduction assurance ({insuranceData.coveragePercent}%)</span>
-                      <span className="font-medium">-{insuranceDeduction.toLocaleString()} GNF</span>
+                      <span className="font-medium">-{Number(insuranceDeduction).toLocaleString()} GNF</span>
                     </div>
                   )}
                   {discountDeduction > 0 && (
                     <div className="flex items-center justify-between text-sm text-success">
                       <span className="text-muted-foreground">Remise ({discountData.discountPercent}%)</span>
-                      <span className="font-medium">-{discountDeduction.toLocaleString()} GNF</span>
+                      <span className="font-medium">-{Number(discountDeduction).toLocaleString()} GNF</span>
                     </div>
                   )}
                   <div className="flex items-center justify-between pt-2 border-t font-semibold text-lg">
                     <span>Total à payer</span>
-                    <span className="text-primary">{totalAmount.toLocaleString()} GNF</span>
+                    <span className="text-primary">{Number(totalAmount).toLocaleString()} GNF</span>
                   </div>
                 </div>
 
@@ -1739,13 +1739,13 @@ const RegisterPatient: React.FC = () => {
             <AlertDialogDescription>
               {activeTab === 'existing' && existingPatient ? (
                 <>
-                  Enregistrer le paiement de <strong>{totalAmount.toLocaleString()} GNF</strong> pour{' '}
+                  Enregistrer le paiement de <strong>{Number(totalAmount).toLocaleString()} GNF</strong> pour{' '}
                   <strong>{existingPatient.firstName} {existingPatient.lastName}</strong> ?
                 </>
               ) : (
                 <>
                   Créer le patient <strong>{formData.firstName} {formData.lastName}</strong> et enregistrer le paiement
-                  de <strong>{totalAmount.toLocaleString()} GNF</strong> ?
+                  de <strong>{Number(totalAmount).toLocaleString()} GNF</strong> ?
                 </>
               )}
             </AlertDialogDescription>
