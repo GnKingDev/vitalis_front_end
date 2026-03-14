@@ -1150,10 +1150,10 @@ const PharmacyStock: React.FC = () => {
                         <Badge variant="outline">{product.category}</Badge>
                       </td>
                       <td className="py-3 px-4 font-medium">
-                        {(product.price || 0).toLocaleString()} GNF
+                        {Number(product.price || 0).toLocaleString()} GNF
                       </td>
                       <td className="py-3 px-4 font-medium">
-                        {(product.salePrice ?? 0).toLocaleString()} GNF
+                        {Number(product.salePrice ?? 0).toLocaleString()} GNF
                       </td>
                       <td className="py-3 px-4">
                         <div className="w-32">
