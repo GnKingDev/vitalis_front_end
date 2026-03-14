@@ -52,11 +52,13 @@ const LoginPage: React.FC = () => {
         toast.info('Changement de mot de passe requis', {
           description: 'Veuillez modifier votre mot de passe avant de continuer',
         });
+        setIsLoading(false);
         navigate('/change-password');
       } else {
         toast.success('Connexion réussie', {
           description: `Bienvenue ${user.name}`,
         });
+        setIsLoading(false);
         navigate('/dashboard');
       }
     } catch (err: any) {
@@ -65,7 +67,6 @@ const LoginPage: React.FC = () => {
       toast.error('Erreur de connexion', {
         description: errorMessage,
       });
-    } finally {
       setIsLoading(false);
     }
   };
