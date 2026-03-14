@@ -45,6 +45,7 @@ export interface LabResultData {
 
 interface ParameterRow {
   id: string;
+  numero: string;
   parameterName: string;
   value: string;
   unit: string;
@@ -79,6 +80,7 @@ const LabResultsFormComplete: React.FC<LabResultsFormCompleteProps> = ({
         if (exam) {
           results[exam.id] = section.items.map((item: any, index: number) => ({
             id: `loaded-${exam.id}-${index}`,
+            numero: item.numero ?? item.number ?? String(index + 1),
             parameterName: item.name || '',
             value: item.value || '',
             unit: item.unit || '',
@@ -160,7 +162,7 @@ const LabResultsFormComplete: React.FC<LabResultsFormCompleteProps> = ({
     return undefined;
   };
 
-  const updateParameter = (examId: string, paramId: string, field: 'parameterName' | 'value' | 'unit' | 'referenceRange', newValue: string) => {
+  const updateParameter = (examId: string, paramId: string, field: 'numero' | 'parameterName' | 'value' | 'unit' | 'referenceRange', newValue: string) => {
     setFormData(prev => {
       const examParams = prev.examResults[examId] || [];
       
@@ -192,6 +194,7 @@ const LabResultsFormComplete: React.FC<LabResultsFormCompleteProps> = ({
   const addCustomParameter = (examId: string) => {
     const newParam: ParameterRow = {
       id: `custom-${Date.now()}-${Math.random()}`,
+      numero: '',
       parameterName: '',
       value: '',
       unit: '',
@@ -251,75 +254,120 @@ const LabResultsFormComplete: React.FC<LabResultsFormCompleteProps> = ({
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-[80px]">N°</TableHead>
                 <TableHead className="w-[250px]">Paramètre</TableHead>
-                <TableHead className="w-[150px]">Résultat</TableHead>
+                <TableHead className="w-[180px]">Résultats</TableHead>
+                <TableHead className="w-[180px]">Valeurs normales</TableHead>
                 <TableHead className="w-[100px]">Unités</TableHead>
-                <TableHead className="w-[150px]">Valeurs de référence</TableHead>
                 {!isPreviewMode && <TableHead className="w-[50px]"></TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
               {parameters.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={isPreviewMode ? 4 : 5} className="text-center py-8 text-muted-foreground">
-                    Aucun paramètre ajouté. Cliquez sur "Ajouter paramètre" pour commencer.
+                  <TableCell colSpan={isPreviewMode ? 5 : 6} className="text-center py-8 text-muted-foreground">
+                    Aucun paramètre ajouté. Cliquez sur &quot;Ajouter paramètre&quot; pour commencer.
                   </TableCell>
                 </TableRow>
               ) : (
                 parameters.map((param) => (
                   <TableRow key={param.id}>
-                    <TableCell className="font-medium">
+                    <TableCell>
+                      {isPreviewMode ? (
+                        param.numero || '-'
+                      ) : (
+                        <div className="space-y-1">
+                          <Label htmlFor={`numero-${param.id}`} className="text-xs text-muted-foreground">
+                            Numérotation
+                          </Label>
+                          <Input
+                            id={`numero-${param.id}`}
+                            type="text"
+                            value={param.numero}
+                            onChange={(e) => updateParameter(examId, param.id, 'numero', e.target.value)}
+                            placeholder="Ex: 1, 1.1, A..."
+                            className="w-full"
+                            disabled={isReadOnly}
+                          />
+                        </div>
+                      )}
+                    </TableCell>
+                    <TableCell>
                       {isPreviewMode ? (
                         param.parameterName || '-'
                       ) : (
-                        <Input
-                          value={param.parameterName}
-                          onChange={(e) => updateParameter(examId, param.id, 'parameterName', e.target.value)}
-                          placeholder="Nom du paramètre"
-                          className="w-full"
-                        />
+                        <div className="space-y-1">
+                          <Label htmlFor={`param-${param.id}`} className="text-xs text-muted-foreground">
+                            Désignation de l&apos;analyse
+                          </Label>
+                          <Input
+                            id={`param-${param.id}`}
+                            value={param.parameterName}
+                            onChange={(e) => updateParameter(examId, param.id, 'parameterName', e.target.value)}
+                            placeholder="Ex: Hémoglobine, Glycémie..."
+                            className="w-full"
+                          />
+                        </div>
                       )}
                     </TableCell>
                     <TableCell>
                       {isPreviewMode ? (
                         <span className="font-medium">{param.value || '-'}</span>
                       ) : (
-                        <Input
-                          type="text"
-                          value={param.value}
-                          onChange={(e) => updateParameter(examId, param.id, 'value', e.target.value)}
-                          placeholder="Saisir valeur"
-                          className="w-full"
-                          disabled={isReadOnly}
-                        />
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {isPreviewMode ? (
-                        <span className="text-sm text-muted-foreground">{param.unit || '-'}</span>
-                      ) : (
-                        <Input
-                          type="text"
-                          value={param.unit}
-                          onChange={(e) => updateParameter(examId, param.id, 'unit', e.target.value)}
-                          placeholder="Unité"
-                          className="w-full"
-                          disabled={isReadOnly}
-                        />
+                        <div className="space-y-1">
+                          <Label htmlFor={`value-${param.id}`} className="text-xs text-muted-foreground">
+                            Valeur obtenue
+                          </Label>
+                          <Input
+                            id={`value-${param.id}`}
+                            type="text"
+                            value={param.value}
+                            onChange={(e) => updateParameter(examId, param.id, 'value', e.target.value)}
+                            placeholder="Ex: 14.2"
+                            className="w-full"
+                            disabled={isReadOnly}
+                          />
+                        </div>
                       )}
                     </TableCell>
                     <TableCell>
                       {isPreviewMode ? (
                         <span className="text-sm text-muted-foreground">{param.referenceRange || '-'}</span>
                       ) : (
-                        <Input
-                          type="text"
-                          value={param.referenceRange}
-                          onChange={(e) => updateParameter(examId, param.id, 'referenceRange', e.target.value)}
-                          placeholder="Ex: 3.5-5.0"
-                          className="w-full"
-                          disabled={isReadOnly}
-                        />
+                        <div className="space-y-1">
+                          <Label htmlFor={`ref-${param.id}`} className="text-xs text-muted-foreground">
+                            Plage normale
+                          </Label>
+                          <Input
+                            id={`ref-${param.id}`}
+                            type="text"
+                            value={param.referenceRange}
+                            onChange={(e) => updateParameter(examId, param.id, 'referenceRange', e.target.value)}
+                            placeholder="Ex: 12.0-16.0 ou <200"
+                            className="w-full"
+                            disabled={isReadOnly}
+                          />
+                        </div>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {isPreviewMode ? (
+                        <span className="text-sm text-muted-foreground">{param.unit || '-'}</span>
+                      ) : (
+                        <div className="space-y-1">
+                          <Label htmlFor={`unit-${param.id}`} className="text-xs text-muted-foreground">
+                            Unité
+                          </Label>
+                          <Input
+                            id={`unit-${param.id}`}
+                            type="text"
+                            value={param.unit}
+                            onChange={(e) => updateParameter(examId, param.id, 'unit', e.target.value)}
+                            placeholder="Ex: g/dL, mmol/L"
+                            className="w-full"
+                            disabled={isReadOnly}
+                          />
+                        </div>
                       )}
                     </TableCell>
                     {!isPreviewMode && !isReadOnly && (
@@ -506,6 +554,9 @@ const LabResultsFormComplete: React.FC<LabResultsFormCompleteProps> = ({
             <FlaskConical className="h-5 w-5 text-primary" />
             Résultats des examens demandés
           </CardTitle>
+          <p className="text-sm text-muted-foreground mt-2">
+            Pour chaque ligne : saisir le paramètre, la valeur obtenue et les valeurs normales de référence.
+          </p>
         </CardHeader>
         <CardContent>
           {labRequest.exams.map((exam) => (

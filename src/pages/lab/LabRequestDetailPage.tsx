@@ -602,6 +602,7 @@ const LabRequestDetailPage: React.FC = () => {
                   return {
                     title: examName,
                     items: parameters.map((param: any) => ({
+                      numero: param.numero || '',
                       name: param.parameterName || '',
                       value: param.value || '',
                       unit: param.unit || '',

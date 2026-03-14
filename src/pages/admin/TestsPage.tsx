@@ -96,16 +96,18 @@ const TestsPage: React.FC = () => {
   const itemsPerPage = 10;
 
   // Formater pour affichage (séparateurs de milliers) - tableau uniquement
+  // Attention: Sequelize retourne DECIMAL en string "1200000.00" - utiliser parseFloat, pas replace(/\D/g) qui fusionnerait "1200000.00" en "120000000"
   const formatPriceDisplay = (value: string | number): string => {
     if (value === '' || value === null || value === undefined) return '';
-    const n = typeof value === 'number' ? value : parseInt(String(value).replace(/\D/g, ''), 10) || 0;
-    return n.toLocaleString('fr-FR', { maximumFractionDigits: 0 });
+    const n = typeof value === 'number' ? value : parseFloat(String(value)) || 0;
+    return Math.floor(n).toLocaleString('fr-FR', { maximumFractionDigits: 0 });
   };
 
   // Parser la valeur saisie en nombre (ce que l'utilisateur tape = ce qu'il obtient)
   const parsePrice = (value: string): number => {
     if (!value) return 0;
-    return parseInt(value.replace(/\D/g, ''), 10) || 0;
+    const n = parseFloat(String(value).replace(',', '.')) || 0;
+    return Math.floor(n);
   };
 
   // Charger les tests depuis l'API

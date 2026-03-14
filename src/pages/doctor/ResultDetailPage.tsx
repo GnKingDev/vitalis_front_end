@@ -365,15 +365,17 @@ const ResultDetailPage: React.FC = () => {
                         <Table>
                           <TableHeader>
                             <TableRow>
+                              <TableHead className="w-[80px]">N°</TableHead>
                               <TableHead className="w-[250px]">Paramètre</TableHead>
                               <TableHead className="w-[150px]">Résultat</TableHead>
                               <TableHead className="w-[100px]">Unités</TableHead>
-                              <TableHead className="w-[150px]">Valeurs de référence</TableHead>
+                              <TableHead className="w-[150px]">Valeurs normales</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
                             {items.map((item, idx) => (
                               <TableRow key={idx}>
+                                <TableCell className="text-muted-foreground">{item.numero ?? (item as any).number ?? '—'}</TableCell>
                                 <TableCell className="font-medium">{item.name ?? '—'}</TableCell>
                                 <TableCell>
                                   <span className="font-medium">{item.value ?? '—'}</span>
