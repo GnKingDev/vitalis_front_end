@@ -38,6 +38,8 @@ import {
   Shield,
   ShieldCheck,
   Percent,
+  Eye,
+  Loader2,
 } from 'lucide-react';
 import {
   Select,
@@ -52,6 +54,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogFooter,
 } from '@/components/ui/dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar as CalendarComponent } from '@/components/ui/calendar';
@@ -62,7 +65,7 @@ import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import type { Payment, PaymentMethod, PaymentStatus, PharmacyProduct } from '@/types';
-import { getPharmacyPayments, getPharmacyProducts, createPharmacyPayment, exportPharmacyPayments } from '@/services/api/pharmacyService';
+import { getPharmacyPayments, getPharmacyProducts, createPharmacyPayment, exportPharmacyPayments, getPharmacyPaymentById } from '@/services/api/pharmacyService';
 import { getInsuranceEstablishments } from '@/services/api/insuranceEstablishmentsService';
 import type { InsuranceEstablishment } from '@/services/api/insuranceEstablishmentsService';
 import { getPatients } from '@/services/api/patientsService';
@@ -114,8 +117,27 @@ const PharmacyPaymentsPage: React.FC = () => {
     hasDiscount: false,
     discountPercent: 0,
   });
+  const [detailPayment, setDetailPayment] = useState<any | null>(null);
+  const [loadingDetailId, setLoadingDetailId] = useState<string | null>(null);
+  const [detailProductPage, setDetailProductPage] = useState(1);
 
   const itemsPerPage = 10;
+  const detailProductsPerPage = 5;
+
+  const openPaymentDetail = async (paymentId: string) => {
+    setDetailPayment(null);
+    setDetailProductPage(1);
+    setLoadingDetailId(paymentId);
+    try {
+      const res = await getPharmacyPaymentById(paymentId);
+      if (res?.success && res.data) setDetailPayment(res.data);
+      else toast.error('Impossible de charger le détail');
+    } catch (e) {
+      toast.error('Erreur lors du chargement');
+    } finally {
+      setLoadingDetailId(null);
+    }
+  };
 
   // Pré-remplir assurance/remise depuis le patient quand il est sélectionné
   useEffect(() => {
@@ -351,8 +373,9 @@ const PharmacyPaymentsPage: React.FC = () => {
   const stats = useMemo(() => {
     const paid = payments.filter((p) => p.status === 'paid');
     const pending = payments.filter((p) => p.status === 'pending');
-    const totalAmount = payments.reduce((sum, p) => sum + (p.amount || 0), 0);
-    const paidAmount = paid.reduce((sum, p) => sum + (p.amount || 0), 0);
+    const parseAmount = (a: any) => parseFloat(a) || 0;
+    const totalAmount = payments.reduce((sum, p) => sum + parseAmount(p.amount), 0);
+    const paidAmount = paid.reduce((sum, p) => sum + parseAmount(p.amount), 0);
 
     return {
       total: payments.length,
@@ -935,7 +958,7 @@ const PharmacyPaymentsPage: React.FC = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Montant total</p>
-                <p className="text-2xl font-bold">{stats.totalAmount.toLocaleString()} GNF</p>
+                <p className="text-2xl font-bold">{Number(stats.totalAmount).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} GNF</p>
               </div>
               <Banknote className="h-8 w-8 text-warning opacity-50" />
             </div>
@@ -1129,6 +1152,7 @@ const PharmacyPaymentsPage: React.FC = () => {
                     <TableHead className="text-right">Montant payé</TableHead>
                     <TableHead>Méthode</TableHead> 
                     <TableHead>Statut</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -1206,7 +1230,19 @@ const PharmacyPaymentsPage: React.FC = () => {
                         </TableCell>
                         <TableCell>
                           {getStatusBadge(payment.status)}
-                        </TableCell> 
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => openPaymentDetail(payment.id)}
+                            disabled={loadingDetailId === payment.id}
+                            className="gap-1"
+                          >
+                            {loadingDetailId === payment.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Eye className="h-4 w-4" />}
+                            Détail
+                          </Button>
+                        </TableCell>
                       </TableRow>
                     );
                   })}
@@ -1267,6 +1303,162 @@ const PharmacyPaymentsPage: React.FC = () => {
           )}
         </CardContent> 
       </Card>
+
+      {/* Modal Détail paiement */}
+      <Dialog open={!!detailPayment} onOpenChange={(open) => !open && setDetailPayment(null)}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Détail du paiement</DialogTitle>
+          </DialogHeader>
+          {detailPayment && (() => {
+            const allItems = detailPayment.items || [];
+            const detailTotalPages = Math.max(1, Math.ceil(allItems.length / detailProductsPerPage));
+            const start = (detailProductPage - 1) * detailProductsPerPage;
+            const paginatedItems = allItems.slice(start, start + detailProductsPerPage);
+            return (
+            <div className="space-y-6 mt-4">
+              {/* Tableau produits */}
+              <div className="border rounded-lg overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Produit</TableHead>
+                      <TableHead className="text-right">Qté</TableHead>
+                      <TableHead className="text-right">Prix vente (unit.)</TableHead>
+                      <TableHead className="text-right">Prix privé (unit.)</TableHead>
+                      <TableHead className="text-right">Total vente</TableHead>
+                      <TableHead className="text-right">Total privé</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {paginatedItems.map((item: any) => {
+                      const product = item.product || {};
+                      const unitPrice = Number(item.unitPrice ?? product.salePrice ?? product.price ?? 0);
+                      const privatePrice = Number(product.price ?? 0);
+                      const qty = Number(item.quantity ?? 1);
+                      const totalVente = Number(item.totalPrice ?? unitPrice * qty);
+                      const totalPrive = privatePrice * qty;
+                      return (
+                        <TableRow key={item.id}>
+                          <TableCell className="font-medium">{product.name ?? '—'}</TableCell>
+                          <TableCell className="text-right">{qty}</TableCell>
+                          <TableCell className="text-right">{unitPrice.toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} GNF</TableCell>
+                          <TableCell className="text-right">{privatePrice.toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} GNF</TableCell>
+                          <TableCell className="text-right">{totalVente.toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} GNF</TableCell>
+                          <TableCell className="text-right">{totalPrive.toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} GNF</TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+                {allItems.length > detailProductsPerPage && (
+                  <div className="px-4 py-3 border-t flex items-center justify-between">
+                    <div className="text-sm text-muted-foreground">
+                      Produits {start + 1}-{Math.min(start + detailProductsPerPage, allItems.length)} sur {allItems.length}
+                    </div>
+                    <Pagination>
+                      <PaginationContent>
+                        <PaginationItem>
+                          <PaginationPrevious
+                            href="#"
+                            onClick={(e) => { e.preventDefault(); if (detailProductPage > 1) setDetailProductPage(p => p - 1); }}
+                            className={detailProductPage === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                          />
+                        </PaginationItem>
+                        {Array.from({ length: detailTotalPages }, (_, i) => i + 1).map((p) => (
+                          <PaginationItem key={p}>
+                            <PaginationLink
+                              href="#"
+                              onClick={(e) => { e.preventDefault(); setDetailProductPage(p); }}
+                              isActive={detailProductPage === p}
+                              className="cursor-pointer"
+                            >
+                              {p}
+                            </PaginationLink>
+                          </PaginationItem>
+                        ))}
+                        <PaginationItem>
+                          <PaginationNext
+                            href="#"
+                            onClick={(e) => { e.preventDefault(); if (detailProductPage < detailTotalPages) setDetailProductPage(p => p + 1); }}
+                            className={detailProductPage === detailTotalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                          />
+                        </PaginationItem>
+                      </PaginationContent>
+                    </Pagination>
+                  </div>
+                )}
+              </div>
+
+              {/* Totaux + assurance / remise */}
+              <div className="space-y-3 p-4 bg-muted/50 rounded-lg border">
+                {(() => {
+                  const items = detailPayment.items || [];
+                  const totalVente = items.reduce((s: number, i: any) => s + (Number(i.totalPrice ?? 0) || Number(i.unitPrice ?? 0) * Number(i.quantity ?? 1)), 0);
+                  const totalPrive = items.reduce((s: number, i: any) => {
+                    const p = i.product || {};
+                    return s + (Number(p.price ?? 0) * Number(i.quantity ?? 1));
+                  }, 0);
+                  const ins = Number(detailPayment.insuranceDeduction ?? 0);
+                  const disc = Number(detailPayment.discountDeduction ?? 0);
+                  return (
+                    <>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Total prix vente</span>
+                        <span>{totalVente.toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} GNF</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Total prix privé</span>
+                        <span>{totalPrive.toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} GNF</span>
+                      </div>
+                      {ins > 0 && (
+                        <div className="flex justify-between text-sm">
+                          <span className="flex items-center gap-2">
+                            <Shield className="h-4 w-4 text-primary" />
+                            Assurance (prise en charge)
+                          </span>
+                          <span className="text-success">-{ins.toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} GNF</span>
+                        </div>
+                      )}
+                      {disc > 0 && (
+                        <div className="flex justify-between text-sm">
+                          <span className="flex items-center gap-2">
+                            <Percent className="h-4 w-4 text-primary" />
+                            Remise
+                          </span>
+                          <span className="text-success">-{disc.toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} GNF</span>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
+                <div className="flex justify-between pt-2 border-t font-semibold">
+                  <span>Montant payé</span>
+                  <span className="text-success">{(Number(detailPayment.amount ?? 0)).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} GNF</span>
+                </div>
+                <div className="flex justify-between text-sm text-muted-foreground">
+                  <span>Date</span>
+                  <span>
+                    {detailPayment.createdAt
+                      ? new Date(detailPayment.createdAt).toLocaleString('fr-FR', {
+                          dateStyle: 'medium',
+                          timeStyle: 'short',
+                        })
+                      : '—'}
+                  </span>
+                </div>
+              </div>
+
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setDetailPayment(null)}>
+                  Fermer
+                </Button>
+              </DialogFooter>
+            </div>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

@@ -12,6 +12,7 @@ export const getPharmacyProducts = async (params?: {
   limit?: number;
   search?: string;
   category?: string;
+  unit?: string;
   lowStock?: boolean;
   outOfStock?: boolean;
 }): Promise<any> => {
@@ -20,6 +21,7 @@ export const getPharmacyProducts = async (params?: {
   if (params?.limit) queryParams.append('limit', params.limit.toString());
   if (params?.search) queryParams.append('search', params.search);
   if (params?.category) queryParams.append('category', params.category);
+  if (params?.unit) queryParams.append('unit', params.unit);
   if (params?.lowStock) queryParams.append('lowStock', 'true');
   if (params?.outOfStock) queryParams.append('outOfStock', 'true');
 
@@ -64,6 +66,34 @@ export const updatePharmacyProduct = async (id: string, productData: Partial<any
  */
 export const deletePharmacyProduct = async (id: string): Promise<any> => {
   return api.delete(`/pharmacy/products/${id}`);
+};
+
+/**
+ * Liste toutes les unités
+ */
+export const getPharmacyUnits = async (): Promise<any> => {
+  return api.get('/pharmacy/units');
+};
+
+/**
+ * Créer une unité
+ */
+export const createPharmacyUnit = async (name: string): Promise<any> => {
+  return api.post('/pharmacy/units', { name });
+};
+
+/**
+ * Modifier une unité
+ */
+export const updatePharmacyUnit = async (id: string, name: string): Promise<any> => {
+  return api.put(`/pharmacy/units/${id}`, { name });
+};
+
+/**
+ * Supprimer une unité
+ */
+export const deletePharmacyUnit = async (id: string): Promise<any> => {
+  return api.delete(`/pharmacy/units/${id}`);
 };
 
 /**
@@ -156,6 +186,13 @@ export const exportPharmacyPayments = async (params?: {
   }
 
   return response.blob();
+};
+
+/**
+ * Récupérer les détails d'un paiement pharmacie
+ */
+export const getPharmacyPaymentById = async (id: string): Promise<any> => {
+  return api.get(`/pharmacy/payments/${id}`);
 };
 
 /**

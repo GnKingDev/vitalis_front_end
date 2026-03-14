@@ -20,7 +20,18 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogFooter,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
 import {
   Search,
@@ -31,6 +42,9 @@ import {
   TrendingUp,
   TrendingDown,
   Tag,
+  Pencil,
+  Trash2,
+  Loader2,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import {
@@ -43,10 +57,16 @@ import {
   PaginationEllipsis,
 } from '@/components/ui/pagination';
 import type { PharmacyProduct } from '@/types';
-import { 
+import {
   getPharmacyProducts, 
   createPharmacyProduct,
+  updatePharmacyProduct,
+  deletePharmacyProduct,
   getPharmacyCategories,
+  getPharmacyUnits,
+  createPharmacyUnit,
+  updatePharmacyUnit,
+  deletePharmacyUnit,
 } from '@/services/api/pharmacyService';
 
 const PharmacyStock: React.FC = () => {
@@ -54,10 +74,33 @@ const PharmacyStock: React.FC = () => {
   const [appliedSearch, setAppliedSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [appliedCategoryFilter, setAppliedCategoryFilter] = useState<string>('all');
+  const [unitFilter, setUnitFilter] = useState<string>('all');
+  const [appliedUnitFilter, setAppliedUnitFilter] = useState<string>('all');
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [products, setProducts] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [categories, setCategories] = useState<any[]>([]);
+  const [units, setUnits] = useState<{ id: string; name: string }[]>([]);
+  const [isAddUnitModalOpen, setIsAddUnitModalOpen] = useState(false);
+  const [newUnitName, setNewUnitName] = useState('');
+  const [isCreatingUnit, setIsCreatingUnit] = useState(false);
+  const [editingUnitId, setEditingUnitId] = useState<string | null>(null);
+  const [editingUnitName, setEditingUnitName] = useState('');
+  const [unitToDelete, setUnitToDelete] = useState<{ id: string; name: string } | null>(null);
+  const [isDeletingUnit, setIsDeletingUnit] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<any | null>(null);
+  const [isUpdatingProduct, setIsUpdatingProduct] = useState(false);
+  const [productToDelete, setProductToDelete] = useState<any | null>(null);
+  const [isDeletingProduct, setIsDeletingProduct] = useState(false);
+  const [editFormData, setEditFormData] = useState({
+    name: '',
+    category: '',
+    price: '',
+    salePrice: '',
+    stock: '',
+    minStock: '',
+    unit: '',
+  });
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
@@ -73,7 +116,7 @@ const PharmacyStock: React.FC = () => {
     unit: '',
   });
 
-  // Charger les catégories depuis l'API
+  // Charger les catégories et unités depuis l'API
   useEffect(() => {
     const loadCategories = async () => {
       try {
@@ -86,11 +129,23 @@ const PharmacyStock: React.FC = () => {
         }
       } catch (error: any) {
         console.error('Erreur lors du chargement des catégories:', error);
-        // En cas d'erreur, on peut extraire les catégories des produits comme fallback
+      }
+    };
+
+    const loadUnits = async () => {
+      try {
+        const response = await getPharmacyUnits();
+        if (response?.success && response.data) {
+          const unitsData = Array.isArray(response.data) ? response.data : [];
+          setUnits(unitsData);
+        }
+      } catch (error: any) {
+        console.error('Erreur lors du chargement des unités:', error);
       }
     };
 
     loadCategories();
+    loadUnits();
   }, []);
 
   // Charger les produits depuis l'API avec pagination
@@ -103,6 +158,7 @@ const PharmacyStock: React.FC = () => {
           limit: itemsPerPage,
           search: appliedSearch || undefined,
           category: appliedCategoryFilter !== 'all' ? appliedCategoryFilter : undefined,
+          unit: appliedUnitFilter !== 'all' ? appliedUnitFilter : undefined,
         });
         
         if (response.success && response.data) {
@@ -130,12 +186,13 @@ const PharmacyStock: React.FC = () => {
     };
 
     loadProducts();
-  }, [currentPage, appliedSearch, appliedCategoryFilter]);
+  }, [currentPage, appliedSearch, appliedCategoryFilter, appliedUnitFilter]);
 
   // Appliquer les filtres
   const handleApplyFilters = () => {
     setAppliedSearch(searchQuery);
     setAppliedCategoryFilter(categoryFilter);
+    setAppliedUnitFilter(unitFilter);
     setCurrentPage(1);
   };
 
@@ -145,6 +202,8 @@ const PharmacyStock: React.FC = () => {
     setAppliedSearch('');
     setCategoryFilter('all');
     setAppliedCategoryFilter('all');
+    setUnitFilter('all');
+    setAppliedUnitFilter('all');
     setCurrentPage(1);
   };
 
@@ -188,6 +247,156 @@ const PharmacyStock: React.FC = () => {
       }
     }
     return pages;
+  };
+
+  const handleCreateUnit = async () => {
+    if (!newUnitName.trim()) {
+      toast.error('Veuillez saisir un nom pour l\'unité');
+      return;
+    }
+    try {
+      setIsCreatingUnit(true);
+      const response = await createPharmacyUnit(newUnitName.trim());
+      if (response?.success && response.data) {
+        const unit = response.data;
+        setUnits((prev) => [...prev, { id: unit.id, name: unit.name }].sort((a, b) => a.name.localeCompare(b.name)));
+        setNewProduct((prev) => ({ ...prev, unit: unit.name }));
+        setNewUnitName('');
+        toast.success('Unité créée avec succès');
+      } else {
+        toast.error(response?.message || 'Erreur lors de la création');
+      }
+    } catch (error: any) {
+      toast.error(error?.message || 'Impossible de créer l\'unité');
+    } finally {
+      setIsCreatingUnit(false);
+    }
+  };
+
+  const handleUpdateUnit = async () => {
+    if (!editingUnitId || !editingUnitName.trim()) return;
+    try {
+      const response = await updatePharmacyUnit(editingUnitId, editingUnitName.trim());
+      if (response?.success && response.data) {
+        setUnits((prev) =>
+          prev.map((u) => (u.id === editingUnitId ? { ...u, name: response.data.name } : u)).sort((a, b) => a.name.localeCompare(b.name))
+        );
+        if (newProduct.unit && units.find((u) => u.id === editingUnitId)?.name === newProduct.unit) {
+          setNewProduct((prev) => ({ ...prev, unit: response.data.name }));
+        }
+        setEditingUnitId(null);
+        setEditingUnitName('');
+        toast.success('Unité modifiée');
+      } else {
+        toast.error(response?.message || 'Erreur');
+      }
+    } catch (error: any) {
+      toast.error(error?.message || 'Impossible de modifier');
+    }
+  };
+
+  const handleDeleteUnit = async () => {
+    if (!unitToDelete) return;
+    try {
+      setIsDeletingUnit(true);
+      await deletePharmacyUnit(unitToDelete.id);
+      setUnits((prev) => prev.filter((u) => u.id !== unitToDelete.id));
+      if (newProduct.unit === unitToDelete.name) {
+        setNewProduct((prev) => ({ ...prev, unit: '' }));
+      }
+      setUnitToDelete(null);
+      toast.success('Unité supprimée');
+    } catch (error: any) {
+      toast.error(error?.message || 'Impossible de supprimer');
+    } finally {
+      setIsDeletingUnit(false);
+    }
+  };
+
+  const loadProductsList = async () => {
+    const response = await getPharmacyProducts({
+      page: currentPage,
+      limit: itemsPerPage,
+      search: appliedSearch || undefined,
+      category: appliedCategoryFilter !== 'all' ? appliedCategoryFilter : undefined,
+      unit: appliedUnitFilter !== 'all' ? appliedUnitFilter : undefined,
+    });
+    if (response.success && response.data) {
+      const productsData = Array.isArray(response.data) ? response.data : response.data.products || [];
+      setProducts(productsData);
+      if (response.data.pagination) {
+        setTotalPages(response.data.pagination.totalPages || 1);
+        setTotalItems(response.data.pagination.totalItems || productsData.length);
+      }
+    }
+  };
+
+  const handleEditProduct = (product: any) => {
+    setEditingProduct(product);
+    setEditFormData({
+      name: product.name || '',
+      category: product.category || '',
+      price: String(product.price ?? ''),
+      salePrice: String(product.salePrice ?? product.price ?? ''),
+      stock: String(product.stock ?? ''),
+      minStock: String(product.minStock ?? ''),
+      unit: product.unit || '',
+    });
+  };
+
+  const handleUpdateProduct = async () => {
+    if (!editingProduct) return;
+    const { name, category, price, salePrice, stock, minStock, unit } = editFormData;
+    if (!name?.trim() || !category?.trim() || !price || !salePrice || !stock || !minStock || !unit?.trim()) {
+      toast.error('Veuillez remplir tous les champs obligatoires');
+      return;
+    }
+    const priceNum = parseFloat(price);
+    const salePriceNum = parseFloat(salePrice);
+    const stockNum = parseInt(stock, 10);
+    const minStockNum = parseInt(minStock, 10);
+    if (isNaN(priceNum) || priceNum < 0 || isNaN(salePriceNum) || salePriceNum < 0 || isNaN(stockNum) || stockNum < 0 || isNaN(minStockNum) || minStockNum <= 0) {
+      toast.error('Valeurs invalides');
+      return;
+    }
+    try {
+      setIsUpdatingProduct(true);
+      const response = await updatePharmacyProduct(editingProduct.id, {
+        name: name.trim(),
+        category: category.trim(),
+        price: priceNum,
+        salePrice: salePriceNum,
+        stock: stockNum,
+        minStock: minStockNum,
+        unit: unit.trim(),
+      });
+      if (response?.success) {
+        toast.success('Produit modifié avec succès');
+        setEditingProduct(null);
+        await loadProductsList();
+      } else {
+        toast.error(response?.message || 'Erreur lors de la modification');
+      }
+    } catch (error: any) {
+      toast.error(error?.message || 'Impossible de modifier le produit');
+    } finally {
+      setIsUpdatingProduct(false);
+    }
+  };
+
+  const handleDeleteProduct = async () => {
+    if (!productToDelete) return;
+    try {
+      setIsDeletingProduct(true);
+      await deletePharmacyProduct(productToDelete.id);
+      toast.success('Produit supprimé');
+      setProductToDelete(null);
+      await loadProductsList();
+    } catch (error: any) {
+      toast.error(error?.message || 'Impossible de supprimer le produit');
+    } finally {
+      setIsDeletingProduct(false);
+    }
   };
 
   const getStockStatus = (stock: number, minStock: number) => {
@@ -241,25 +450,7 @@ const PharmacyStock: React.FC = () => {
 
       if (response.success) {
         toast.success('Produit ajouté avec succès');
-        
-        // Recharger les produits
-        const productsResponse = await getPharmacyProducts({
-          page: currentPage,
-          limit: itemsPerPage,
-          search: appliedSearch || undefined,
-          category: appliedCategoryFilter !== 'all' ? appliedCategoryFilter : undefined,
-        });
-        if (productsResponse.success && productsResponse.data) {
-          const productsData = Array.isArray(productsResponse.data) 
-            ? productsResponse.data 
-            : productsResponse.data.products || [];
-          setProducts(productsData);
-          
-          if (productsResponse.data.pagination) {
-            setTotalPages(productsResponse.data.pagination.totalPages || 1);
-            setTotalItems(productsResponse.data.pagination.totalItems || productsData.length);
-          }
-        }
+        await loadProductsList();
         
         // Recharger les catégories
         const categoriesResponse = await getPharmacyCategories();
@@ -404,12 +595,32 @@ const PharmacyStock: React.FC = () => {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="unit">Unité *</Label>
-                  <Input
-                    id="unit"
-                    placeholder="Ex: boîte, flacon, comprimé"
-                    value={newProduct.unit}
-                    onChange={(e) => setNewProduct({ ...newProduct, unit: e.target.value })}
-                  />
+                  <div className="flex gap-2">
+                    <Select
+                      value={newProduct.unit || undefined}
+                      onValueChange={(v) => {
+                        if (v === '__add__') {
+                          setIsAddUnitModalOpen(true);
+                        } else {
+                          setNewProduct({ ...newProduct, unit: v });
+                        }
+                      }}
+                    >
+                      <SelectTrigger id="unit" className="flex-1">
+                        <SelectValue placeholder="Sélectionner une unité" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {units.map((u) => (
+                          <SelectItem key={u.id} value={u.name}>
+                            {u.name}
+                          </SelectItem>
+                        ))}
+                        <SelectItem value="__add__" className="text-primary font-medium">
+                          + Ajouter une unité
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="stock">Stock initial *</Label>
@@ -461,6 +672,269 @@ const PharmacyStock: React.FC = () => {
             </div>
           </DialogContent>
         </Dialog>
+
+        {/* Modal unités : créer, modifier, supprimer */}
+        <Dialog open={isAddUnitModalOpen} onOpenChange={(open) => {
+          setIsAddUnitModalOpen(open);
+          if (!open) {
+            setNewUnitName('');
+            setEditingUnitId(null);
+            setEditingUnitName('');
+          }
+        }}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Gestion des unités</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-6 pt-2">
+              {/* Créer une unité */}
+              <div className="space-y-2">
+                <Label htmlFor="newUnitName">Nouvelle unité</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="newUnitName"
+                    placeholder="Ex: boîte, flacon, comprimé"
+                    value={newUnitName}
+                    onChange={(e) => setNewUnitName(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleCreateUnit()}
+                  />
+                  <Button onClick={handleCreateUnit} disabled={isCreatingUnit || !newUnitName.trim()} size="sm">
+                    {isCreatingUnit ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                  </Button>
+                </div>
+              </div>
+
+              {/* Liste des unités */}
+              <div className="space-y-2">
+                <Label>Unités existantes</Label>
+                <div className="border rounded-md divide-y max-h-48 overflow-y-auto">
+                  {units.length === 0 ? (
+                    <p className="py-6 text-center text-sm text-muted-foreground">Aucune unité</p>
+                  ) : (
+                    units.map((u) => (
+                      <div
+                        key={u.id}
+                        className="flex items-center justify-between gap-2 px-3 py-2 hover:bg-secondary/50"
+                      >
+                        {editingUnitId === u.id ? (
+                          <>
+                            <Input
+                              value={editingUnitName}
+                              onChange={(e) => setEditingUnitName(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') handleUpdateUnit();
+                                if (e.key === 'Escape') { setEditingUnitId(null); setEditingUnitName(''); }
+                              }}
+                              className="h-8"
+                              autoFocus
+                            />
+                            <div className="flex gap-1">
+                              <Button size="sm" variant="ghost" onClick={() => { setEditingUnitId(null); setEditingUnitName(''); }}>
+                                Annuler
+                              </Button>
+                              <Button size="sm" onClick={handleUpdateUnit} disabled={!editingUnitName.trim()}>
+                                Enregistrer
+                              </Button>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <span className="font-medium">{u.name}</span>
+                            <div className="flex gap-1">
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-8 w-8"
+                                onClick={() => { setEditingUnitId(u.id); setEditingUnitName(u.name); }}
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-8 w-8 text-destructive hover:text-destructive"
+                                onClick={() => setUnitToDelete(u)}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => { setIsAddUnitModalOpen(false); setNewUnitName(''); setEditingUnitId(null); }}>
+                Fermer
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <AlertDialog open={!!unitToDelete} onOpenChange={(open) => !open && setUnitToDelete(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Supprimer l&apos;unité</AlertDialogTitle>
+              <AlertDialogDescription>
+                Êtes-vous sûr de vouloir supprimer l&apos;unité &quot;{unitToDelete?.name}&quot; ?
+                Elle ne pourra pas être supprimée si des produits l&apos;utilisent.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Annuler</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleDeleteUnit}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                disabled={isDeletingUnit}
+              >
+                {isDeletingUnit ? 'Suppression...' : 'Supprimer'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Modal Modifier produit */}
+        <Dialog open={!!editingProduct} onOpenChange={(open) => !open && setEditingProduct(null)}>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Modifier le produit</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 pt-2">
+              <div className="space-y-2">
+                <Label htmlFor="edit-name">Nom *</Label>
+                <Input
+                  id="edit-name"
+                  value={editFormData.name}
+                  onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-category">Catégorie *</Label>
+                {categories.length === 0 ? (
+                  <Input
+                    id="edit-category"
+                    value={editFormData.category}
+                    onChange={(e) => setEditFormData({ ...editFormData, category: e.target.value })}
+                  />
+                ) : (
+                  <Select
+                    value={editFormData.category}
+                    onValueChange={(v) => setEditFormData({ ...editFormData, category: v })}
+                  >
+                    <SelectTrigger id="edit-category">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {categories.map((cat) => (
+                        <SelectItem key={cat.id || cat} value={cat.name || cat}>
+                          {cat.name || cat}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-price">Prix (GNF) *</Label>
+                  <Input
+                    id="edit-price"
+                    type="number"
+                    min="0"
+                    value={editFormData.price}
+                    onChange={(e) => setEditFormData({ ...editFormData, price: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-salePrice">Prix vente (GNF) *</Label>
+                  <Input
+                    id="edit-salePrice"
+                    type="number"
+                    min="0"
+                    value={editFormData.salePrice}
+                    onChange={(e) => setEditFormData({ ...editFormData, salePrice: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-unit">Unité *</Label>
+                <Select
+                  value={editFormData.unit || undefined}
+                  onValueChange={(v) => {
+                    if (v === '__add__') {
+                      setIsAddUnitModalOpen(true);
+                    } else {
+                      setEditFormData({ ...editFormData, unit: v });
+                    }
+                  }}
+                >
+                  <SelectTrigger id="edit-unit">
+                    <SelectValue placeholder="Sélectionner une unité" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {units.map((u) => (
+                      <SelectItem key={u.id} value={u.name}>{u.name}</SelectItem>
+                    ))}
+                    <SelectItem value="__add__" className="text-primary font-medium">+ Ajouter une unité</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-stock">Stock *</Label>
+                  <Input
+                    id="edit-stock"
+                    type="number"
+                    min="0"
+                    value={editFormData.stock}
+                    onChange={(e) => setEditFormData({ ...editFormData, stock: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-minStock">Stock min *</Label>
+                  <Input
+                    id="edit-minStock"
+                    type="number"
+                    min="1"
+                    value={editFormData.minStock}
+                    onChange={(e) => setEditFormData({ ...editFormData, minStock: e.target.value })}
+                  />
+                </div>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setEditingProduct(null)}>Annuler</Button>
+              <Button onClick={handleUpdateProduct} disabled={isUpdatingProduct} className="gap-2">
+                {isUpdatingProduct && <Loader2 className="h-4 w-4 animate-spin" />}
+                Enregistrer
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <AlertDialog open={!!productToDelete} onOpenChange={(open) => !open && setProductToDelete(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Supprimer le produit</AlertDialogTitle>
+              <AlertDialogDescription>
+                Êtes-vous sûr de vouloir supprimer le produit &quot;{productToDelete?.name}&quot; ? Cette action est irréversible.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Annuler</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleDeleteProduct}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                disabled={isDeletingProduct}
+              >
+                {isDeletingProduct ? 'Suppression...' : 'Supprimer'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
         </div>
       </PageHeader>
 
@@ -525,7 +999,7 @@ const PharmacyStock: React.FC = () => {
       {/* Filters */}
       <Card>
         <CardContent className="py-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="space-y-2">
               <Label htmlFor="search" className="flex items-center gap-2">
                 <Search className="h-4 w-4" />
@@ -570,6 +1044,29 @@ const PharmacyStock: React.FC = () => {
                       </SelectItem>
                     );
                   })}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="unit-filter">Unité</Label>
+              <Select
+                value={unitFilter}
+                onValueChange={(value) => {
+                  setUnitFilter(value);
+                  setAppliedUnitFilter(value);
+                  setCurrentPage(1);
+                }}
+              >
+                <SelectTrigger id="unit-filter">
+                  <SelectValue placeholder="Toutes les unités" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Toutes les unités</SelectItem>
+                  {units.map((u) => (
+                    <SelectItem key={u.id} value={u.name}>
+                      {u.name}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -625,7 +1122,7 @@ const PharmacyStock: React.FC = () => {
                   {products.length === 0 ? (
                     <tr>
                       <td colSpan={7} className="text-center py-12 text-muted-foreground">
-                        {appliedSearch || appliedCategoryFilter !== 'all' ? 'Aucun produit trouvé' : 'Aucun produit enregistré'}
+                        {appliedSearch || appliedCategoryFilter !== 'all' || appliedUnitFilter !== 'all' ? 'Aucun produit trouvé' : 'Aucun produit enregistré'}
                       </td>
                     </tr>
                   ) : (
@@ -692,9 +1189,25 @@ const PharmacyStock: React.FC = () => {
                         </Badge>
                       </td>
                       <td className="py-3 px-4 text-right">
-                        <Button variant="ghost" size="sm">
-                          <Edit className="h-4 w-4" />
-                        </Button>
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleEditProduct(product)}
+                            title="Modifier"
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setProductToDelete(product)}
+                            title="Supprimer"
+                            className="text-destructive hover:text-destructive"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -706,11 +1219,12 @@ const PharmacyStock: React.FC = () => {
           )}
           
           {/* Pagination */}
-          {!isLoading && products.length > 0 && totalPages > 1 && (
-            <div className="mt-6 px-4 pb-4 flex items-center justify-between">
+          {!isLoading && products.length > 0 && (
+            <div className="mt-6 px-4 pb-4 flex items-center justify-between flex-wrap gap-2">
               <div className="text-sm text-muted-foreground">
                 Affichage de {((currentPage - 1) * itemsPerPage) + 1} à {Math.min(currentPage * itemsPerPage, totalItems || products.length)} sur {totalItems || products.length} produit(s)
               </div>
+              {totalPages > 1 && (
               <Pagination>
                 <PaginationContent>
                   <PaginationItem>
@@ -754,6 +1268,7 @@ const PharmacyStock: React.FC = () => {
                   </PaginationItem>
                 </PaginationContent>
               </Pagination>
+              )}
             </div>
           )}
         </CardContent>

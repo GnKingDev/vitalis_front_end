@@ -446,12 +446,12 @@ const PharmacyAlertsPage: React.FC = () => {
               </div>
 
               {/* Pagination */}
-              {totalPages > 1 && (
-                <div className="mt-6 flex items-center justify-between">
-                  <div className="text-sm text-muted-foreground">
-                    Affichage de {((currentPage - 1) * itemsPerPage) + 1} à {Math.min(currentPage * itemsPerPage, totalItems || alerts.length)} sur {totalItems || alerts.length} alerte(s)
-                  </div>
-                  <Pagination>
+              <div className="mt-6 flex items-center justify-between flex-wrap gap-2">
+                <div className="text-sm text-muted-foreground">
+                  Affichage de {((currentPage - 1) * itemsPerPage) + 1} à {Math.min(currentPage * itemsPerPage, totalItems || alerts.length)} sur {totalItems || alerts.length} alerte(s)
+                </div>
+                {totalPages > 1 && (
+                <Pagination>
                     <PaginationContent>
                       <PaginationItem>
                         <PaginationPrevious
@@ -494,8 +494,8 @@ const PharmacyAlertsPage: React.FC = () => {
                       </PaginationItem>
                     </PaginationContent>
                   </Pagination>
-                </div>
-              )}
+                )}
+              </div>
             </>
           )}
         </CardContent>
