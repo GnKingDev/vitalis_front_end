@@ -2,8 +2,6 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -14,7 +12,13 @@ import {
   Plus,
   X,
 } from 'lucide-react';
-import type { Patient, User, LabRequest, ResultAlert } from '@/types';
+import type { Patient, User, LabRequest } from '@/types';
+
+const NUMEROTATION_OPTIONS = [
+  'GB', 'LYM', 'MON', 'GRA', 'LYM%', 'MON%', 'GRA%',
+  'GR', 'HB', 'HT', 'VGM', 'TCMH', 'CCMH', 'IDRc',
+  'PLT', 'THT', 'VPM', 'IDPc',
+];
 
 interface LabResultsFormCompleteProps {
   labRequest: LabRequest;
@@ -29,15 +33,15 @@ export interface LabResultData {
   labNumber: string;
   serviceDate: string;
   requestedBy: string;
-  
+
   // Patient
   patientName: string;
   patientAge: number;
   vitalisId: string;
-  
+
   // Results by exam
   examResults: { [examId: string]: ParameterRow[] };
-  
+
   // Comments
   labComments?: string;
   interpretation?: string;
@@ -46,72 +50,45 @@ export interface LabResultData {
 interface ParameterRow {
   id: string;
   numero: string;
-  parameterName: string;
   value: string;
-  unit: string;
   referenceRange: string;
-  alert?: ResultAlert;
 }
 
 const LabResultsFormComplete: React.FC<LabResultsFormCompleteProps> = ({
   labRequest,
   patient,
   doctor,
-  onSave,
   onFormDataChange,
 }) => {
-  // Check if results are already sent/validated (read-only mode)
-  // Note: results can be an object (from API) or array (from type definition)
   const resultsObj = Array.isArray(labRequest.results) ? labRequest.results[0] : labRequest.results;
   const isReadOnly = (resultsObj as any)?.status === 'sent' || (resultsObj as any)?.status === 'validated';
   const [isPreviewMode, setIsPreviewMode] = useState(isReadOnly);
-  
-  // Initialize form data with empty results for each requested exam
+
   const initialExamResults = useMemo(() => {
     const results: { [examId: string]: ParameterRow[] } = {};
-    
-    // If results exist and are sent/validated, load them
+
     if (isReadOnly && resultsObj && (resultsObj as any).results?.sections) {
       (resultsObj as any).results.sections.forEach((section: any) => {
-        // Find the exam by name
-        const exam = labRequest.exams.find((e: any) => 
+        const exam = labRequest.exams.find((e: any) =>
           e.name === section.title || e.labExam?.name === section.title
         );
         if (exam) {
           results[exam.id] = section.items.map((item: any, index: number) => ({
             id: `loaded-${exam.id}-${index}`,
             numero: item.numero ?? item.number ?? String(index + 1),
-            parameterName: item.name || '',
             value: item.value || '',
-            unit: item.unit || '',
             referenceRange: item.reference || '',
-            alert: item.status === 'normal' ? 'normal' : 
-                   item.status === 'high' ? 'high' : 
-                   item.status === 'low' ? 'low' : undefined,
           }));
         }
       });
     } else {
-      // Initialize empty results
       labRequest.exams.forEach(exam => {
         results[exam.id] = [];
       });
     }
-    
+
     return results;
   }, [labRequest.exams, labRequest.results, isReadOnly]);
-
-  const [formData, setFormData] = useState<LabResultData>({
-    labNumber: labRequest.id,
-    serviceDate: new Date(labRequest.createdAt).toISOString().split('T')[0],
-    requestedBy: doctor?.name || doctor?.id || '',
-    patientName: `${patient.firstName} ${patient.lastName}`,
-    patientAge: calculateAge(patient.dateOfBirth),
-    vitalisId: patient.vitalisId,
-    examResults: initialExamResults,
-    labComments: (resultsObj as any)?.technicianNotes || '',
-    interpretation: '',
-  });
 
   function calculateAge(dateOfBirth: string): number {
     const birth = new Date(dateOfBirth);
@@ -124,111 +101,68 @@ const LabResultsFormComplete: React.FC<LabResultsFormCompleteProps> = ({
     return age;
   }
 
-  // Check if form has data and notify parent
+  const [formData, setFormData] = useState<LabResultData>({
+    labNumber: labRequest.id,
+    serviceDate: new Date(labRequest.createdAt).toISOString().split('T')[0],
+    requestedBy: doctor?.name || doctor?.id || '',
+    patientName: `${patient.firstName} ${patient.lastName}`,
+    patientAge: calculateAge(patient.dateOfBirth),
+    vitalisId: patient.vitalisId,
+    examResults: initialExamResults,
+  });
+
   useEffect(() => {
     if (!onFormDataChange) return;
-    
+
     const hasData = Object.values(formData.examResults).some(
-      params => params.length > 0 && params.some(p => p.parameterName && p.value)
+      params => params.length > 0 && params.some(p => p.value)
     );
-    
+
     onFormDataChange(hasData ? formData : null);
   }, [formData, onFormDataChange]);
 
-  const calculateAlert = (value: string, referenceRange: string): ResultAlert | undefined => {
-    if (!value || !referenceRange) return undefined;
-    
-    const numValue = parseFloat(value);
-    if (isNaN(numValue)) return undefined;
-
-    if (referenceRange.startsWith('<')) {
-      const max = parseFloat(referenceRange.substring(1));
-      return numValue >= max ? 'high' : 'normal';
-    }
-    if (referenceRange.startsWith('>')) {
-      const min = parseFloat(referenceRange.substring(1));
-      return numValue <= min ? 'low' : 'normal';
-    }
-
-    const rangeParts = referenceRange.split('-');
-    if (rangeParts.length === 2) {
-      const min = parseFloat(rangeParts[0]);
-      const max = parseFloat(rangeParts[1]);
-      if (numValue < min) return 'low';
-      if (numValue > max) return 'high';
-      return 'normal';
-    }
-
-    return undefined;
-  };
-
-  const updateParameter = (examId: string, paramId: string, field: 'numero' | 'parameterName' | 'value' | 'unit' | 'referenceRange', newValue: string) => {
+  const updateParameter = (examId: string, paramId: string, field: 'numero' | 'value' | 'referenceRange', newValue: string) => {
     setFormData(prev => {
       const examParams = prev.examResults[examId] || [];
-      
-      const updated = examParams.map(param => {
-        if (param.id === paramId) {
-          const updatedParam = { ...param, [field]: newValue };
-          // Recalculate alert if value or referenceRange changed
-          if (field === 'value' || field === 'referenceRange') {
-            updatedParam.alert = calculateAlert(
-              field === 'value' ? newValue : updatedParam.value,
-              field === 'referenceRange' ? newValue : updatedParam.referenceRange
-            );
-          }
-          return updatedParam;
-        }
-        return param;
-      });
-      
+      const updated = examParams.map(param =>
+        param.id === paramId ? { ...param, [field]: newValue } : param
+      );
       return {
         ...prev,
-        examResults: {
-          ...prev.examResults,
-          [examId]: updated,
-        },
+        examResults: { ...prev.examResults, [examId]: updated },
       };
     });
   };
 
-  const addCustomParameter = (examId: string) => {
+  const addParameter = (examId: string) => {
     const newParam: ParameterRow = {
       id: `custom-${Date.now()}-${Math.random()}`,
       numero: '',
-      parameterName: '',
       value: '',
-      unit: '',
       referenceRange: '',
     };
-    
-    setFormData(prev => {
-      const examParams = prev.examResults[examId] || [];
-      return {
-        ...prev,
-        examResults: {
-          ...prev.examResults,
-          [examId]: [...examParams, newParam],
-        },
-      };
-    });
+    setFormData(prev => ({
+      ...prev,
+      examResults: {
+        ...prev.examResults,
+        [examId]: [...(prev.examResults[examId] || []), newParam],
+      },
+    }));
   };
 
   const removeParameter = (examId: string, paramId: string) => {
-    setFormData(prev => {
-      const examParams = prev.examResults[examId] || [];
-      return {
-        ...prev,
-        examResults: {
-          ...prev.examResults,
-          [examId]: examParams.filter(p => p.id !== paramId),
-        },
-      };
-    });
+    setFormData(prev => ({
+      ...prev,
+      examResults: {
+        ...prev.examResults,
+        [examId]: prev.examResults[examId].filter(p => p.id !== paramId),
+      },
+    }));
   };
 
   const renderExamTable = (examId: string, examName: string) => {
     const parameters = formData.examResults[examId] || [];
-    
+
     return (
       <div className="mb-6">
         <div className="flex items-center justify-between mb-4">
@@ -238,11 +172,11 @@ const LabResultsFormComplete: React.FC<LabResultsFormCompleteProps> = ({
               {parameters.length} paramètre{parameters.length > 1 ? 's' : ''}
             </p>
           </div>
-          {!isPreviewMode && (
+          {!isPreviewMode && !isReadOnly && (
             <Button
               variant="outline"
               size="sm"
-              onClick={() => addCustomParameter(examId)}
+              onClick={() => addParameter(examId)}
               className="gap-2"
             >
               <Plus className="h-4 w-4" />
@@ -254,18 +188,16 @@ const LabResultsFormComplete: React.FC<LabResultsFormCompleteProps> = ({
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[80px]">N°</TableHead>
-                <TableHead className="w-[250px]">Paramètre</TableHead>
-                <TableHead className="w-[180px]">Résultats</TableHead>
-                <TableHead className="w-[180px]">Valeurs normales</TableHead>
-                <TableHead className="w-[100px]">Unités</TableHead>
-                {!isPreviewMode && <TableHead className="w-[50px]"></TableHead>}
+                <TableHead className="w-[100px]">Numérotation</TableHead>
+                <TableHead>Résultat</TableHead>
+                <TableHead>Valeurs normales</TableHead>
+                {!isPreviewMode && !isReadOnly && <TableHead className="w-[50px]"></TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
               {parameters.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={isPreviewMode ? 5 : 6} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={isPreviewMode ? 3 : 4} className="text-center py-8 text-muted-foreground">
                     Aucun paramètre ajouté. Cliquez sur &quot;Ajouter paramètre&quot; pour commencer.
                   </TableCell>
                 </TableRow>
@@ -280,32 +212,18 @@ const LabResultsFormComplete: React.FC<LabResultsFormCompleteProps> = ({
                           <Label htmlFor={`numero-${param.id}`} className="text-xs text-muted-foreground">
                             Numérotation
                           </Label>
+                          <datalist id={`numero-list-${param.id}`}>
+                            {NUMEROTATION_OPTIONS.map(opt => (
+                              <option key={opt} value={opt} />
+                            ))}
+                          </datalist>
                           <Input
                             id={`numero-${param.id}`}
-                            type="text"
+                            list={`numero-list-${param.id}`}
                             value={param.numero}
                             onChange={(e) => updateParameter(examId, param.id, 'numero', e.target.value)}
-                            placeholder="Ex: 1, 1.1, A..."
-                            className="w-full"
+                            placeholder="Ex: GB, HB..."
                             disabled={isReadOnly}
-                          />
-                        </div>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {isPreviewMode ? (
-                        param.parameterName || '-'
-                      ) : (
-                        <div className="space-y-1">
-                          <Label htmlFor={`param-${param.id}`} className="text-xs text-muted-foreground">
-                            Désignation de l&apos;analyse
-                          </Label>
-                          <Input
-                            id={`param-${param.id}`}
-                            value={param.parameterName}
-                            onChange={(e) => updateParameter(examId, param.id, 'parameterName', e.target.value)}
-                            placeholder="Ex: Hémoglobine, Glycémie..."
-                            className="w-full"
                           />
                         </div>
                       )}
@@ -316,15 +234,13 @@ const LabResultsFormComplete: React.FC<LabResultsFormCompleteProps> = ({
                       ) : (
                         <div className="space-y-1">
                           <Label htmlFor={`value-${param.id}`} className="text-xs text-muted-foreground">
-                            Valeur obtenue
+                            Résultat
                           </Label>
                           <Input
                             id={`value-${param.id}`}
-                            type="text"
                             value={param.value}
                             onChange={(e) => updateParameter(examId, param.id, 'value', e.target.value)}
                             placeholder="Ex: 14.2"
-                            className="w-full"
                             disabled={isReadOnly}
                           />
                         </div>
@@ -336,35 +252,13 @@ const LabResultsFormComplete: React.FC<LabResultsFormCompleteProps> = ({
                       ) : (
                         <div className="space-y-1">
                           <Label htmlFor={`ref-${param.id}`} className="text-xs text-muted-foreground">
-                            Plage normale
+                            Valeurs normales
                           </Label>
                           <Input
                             id={`ref-${param.id}`}
-                            type="text"
                             value={param.referenceRange}
                             onChange={(e) => updateParameter(examId, param.id, 'referenceRange', e.target.value)}
-                            placeholder="Ex: 12.0-16.0 ou <200"
-                            className="w-full"
-                            disabled={isReadOnly}
-                          />
-                        </div>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {isPreviewMode ? (
-                        <span className="text-sm text-muted-foreground">{param.unit || '-'}</span>
-                      ) : (
-                        <div className="space-y-1">
-                          <Label htmlFor={`unit-${param.id}`} className="text-xs text-muted-foreground">
-                            Unité
-                          </Label>
-                          <Input
-                            id={`unit-${param.id}`}
-                            type="text"
-                            value={param.unit}
-                            onChange={(e) => updateParameter(examId, param.id, 'unit', e.target.value)}
-                            placeholder="Ex: g/dL, mmol/L"
-                            className="w-full"
+                            placeholder="Ex: 12.0-16.0"
                             disabled={isReadOnly}
                           />
                         </div>
@@ -395,7 +289,6 @@ const LabResultsFormComplete: React.FC<LabResultsFormCompleteProps> = ({
   if (isPreviewMode) {
     return (
       <div className="space-y-6 print:space-y-4">
-        {/* Preview Mode - Print View */}
         <div className="flex items-center justify-between mb-4 no-print">
           <div className="flex items-center gap-2">
             <Eye className="h-5 w-5 text-primary" />
@@ -403,8 +296,8 @@ const LabResultsFormComplete: React.FC<LabResultsFormCompleteProps> = ({
           </div>
           <div className="flex items-center gap-2">
             <Label>Édition</Label>
-            <Switch 
-              checked={!isPreviewMode} 
+            <Switch
+              checked={!isPreviewMode}
               onCheckedChange={(checked) => setIsPreviewMode(!checked)}
               disabled={isReadOnly}
             />
@@ -412,46 +305,22 @@ const LabResultsFormComplete: React.FC<LabResultsFormCompleteProps> = ({
           </div>
         </div>
 
-        {/* Results Tables - One per exam */}
         {labRequest.exams.map((exam) => (
           <div key={exam.id}>
             {renderExamTable(exam.id, exam.name)}
           </div>
         ))}
 
-        {/* Comments */}
-        {(formData.labComments || formData.interpretation) && (
-          <div className="mt-6 print:mt-4 space-y-4">
-            {formData.labComments && (
-              <div>
-                <p className="text-sm font-semibold mb-2">Commentaires du laboratoire</p>
-                <p className="text-sm whitespace-pre-wrap">{formData.labComments}</p>
-              </div>
-            )}
-            {formData.interpretation && (
-              <div>
-                <p className="text-sm font-semibold mb-2">Interprétation / Notes</p>
-                <p className="text-sm whitespace-pre-wrap">{formData.interpretation}</p>
-              </div>
-            )}
-          </div>
-        )}
-
         <style>{`
           @media print {
-            body {
-              background: white;
-            }
-            .no-print {
-              display: none !important;
-            }
+            body { background: white; }
+            .no-print { display: none !important; }
           }
         `}</style>
       </div>
     );
   }
 
-  // Edit Mode
   return (
     <div className="space-y-6">
       {/* Mode Switch */}
@@ -464,90 +333,18 @@ const LabResultsFormComplete: React.FC<LabResultsFormCompleteProps> = ({
             </div>
             <div className="flex items-center gap-2">
               <Label>Édition</Label>
-              <Switch 
-              checked={!isPreviewMode} 
-              onCheckedChange={(checked) => setIsPreviewMode(!checked)}
-              disabled={isReadOnly}
-            />
+              <Switch
+                checked={!isPreviewMode}
+                onCheckedChange={(checked) => setIsPreviewMode(!checked)}
+                disabled={isReadOnly}
+              />
               <Label>Aperçu</Label>
             </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Header Information */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Informations du rapport</CardTitle>
-        </CardHeader>
-        <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <Label>Nom de la clinique</Label>
-            <Input value="VITALIS" disabled className="mt-1" />
-          </div>
-          <div>
-            <Label>Numéro de laboratoire</Label>
-            <Input
-              value={formData.labNumber}
-              onChange={(e) => setFormData(prev => ({ ...prev, labNumber: e.target.value }))}
-              className="mt-1"
-              disabled={isReadOnly}
-            />
-          </div>
-          <div>
-            <Label>Date de service</Label>
-            <Input
-              type="date"
-              value={formData.serviceDate}
-              onChange={(e) => setFormData(prev => ({ ...prev, serviceDate: e.target.value }))}
-              className="mt-1"
-              disabled={isReadOnly}
-            />
-          </div>
-          <div>
-            <Label>Demandé par</Label>
-            <Input
-              value={doctor?.name || 'N/A'}
-              disabled
-              className="mt-1"
-            />
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Patient Block */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Informations patient</CardTitle>
-        </CardHeader>
-        <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <Label>Nom du patient</Label>
-            <Input
-              value={formData.patientName}
-              onChange={(e) => setFormData(prev => ({ ...prev, patientName: e.target.value }))}
-              className="mt-1"
-              disabled={isReadOnly}
-            />
-          </div>
-          <div>
-            <Label>Âge</Label>
-            <Input
-              type="number"
-              value={formData.patientAge}
-              onChange={(e) => setFormData(prev => ({ ...prev, patientAge: parseInt(e.target.value) || 0 }))}
-              className="mt-1"
-              disabled={isReadOnly}
-            />
-          </div>
-          <div>
-            <Label>ID Patient Vitalis</Label>
-            <Input value={formData.vitalisId} disabled className="mt-1" />
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Results Sections - One per requested exam */}
+      {/* Results Sections */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -555,7 +352,7 @@ const LabResultsFormComplete: React.FC<LabResultsFormCompleteProps> = ({
             Résultats des examens demandés
           </CardTitle>
           <p className="text-sm text-muted-foreground mt-2">
-            Pour chaque ligne : saisir le paramètre, la valeur obtenue et les valeurs normales de référence.
+            Pour chaque ligne : saisir la numérotation, le résultat et les valeurs normales.
           </p>
         </CardHeader>
         <CardContent>
@@ -564,37 +361,6 @@ const LabResultsFormComplete: React.FC<LabResultsFormCompleteProps> = ({
               {renderExamTable(exam.id, exam.name)}
             </div>
           ))}
-        </CardContent>
-      </Card>
-
-      {/* Comments */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Commentaires & Conclusion</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div>
-            <Label>Commentaires du laboratoire</Label>
-            <Textarea
-              value={formData.labComments || ''}
-              onChange={(e) => setFormData(prev => ({ ...prev, labComments: e.target.value }))}
-              placeholder="Ajouter des commentaires..."
-              rows={3}
-              className="mt-2"
-              disabled={isReadOnly}
-            />
-          </div>
-          <div>
-            <Label>Interprétation / Notes</Label>
-            <Textarea
-              value={formData.interpretation || ''}
-              onChange={(e) => setFormData(prev => ({ ...prev, interpretation: e.target.value }))}
-              placeholder="Ajouter une interprétation ou des notes..."
-              rows={3}
-              className="mt-2"
-              disabled={isReadOnly}
-            />
-          </div>
         </CardContent>
       </Card>
     </div>

@@ -204,13 +204,9 @@ const LabRequestDetailPage: React.FC = () => {
           return {
             title: examName,
             items: parameters.map((param: any) => ({
-              name: param.parameterName || '',
+              numero: param.numero || '',
               value: param.value || '',
-              unit: param.unit || '',
               reference: param.referenceRange || '',
-              status: param.alert === 'normal' ? 'normal' : 
-                      param.alert === 'high' ? 'high' : 
-                      param.alert === 'low' ? 'low' : null,
             })),
           };
         });

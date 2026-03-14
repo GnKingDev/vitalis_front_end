@@ -67,38 +67,26 @@ const ImagingRequestsPage: React.FC = () => {
       try {
         setIsLoading(true);
         
-        // Pour le lab, on ne charge que les demandes payées et en attente
-        // Pour l'admin, on charge toutes les demandes
-        const status = user?.role === 'admin' 
-          ? (statusFilter !== 'all' ? statusFilter : undefined)
-          : 'pending'; // Lab ne voit que les demandes en attente
-        
         const response = await getImagingRequests({
           page: currentPage,
           limit: itemsPerPage,
-          status: status,
+          status: statusFilter !== 'all' ? statusFilter : undefined,
           date: dateFilter || undefined,
           search: searchQuery || undefined,
         });
 
         if (response.success && response.data) {
-          const requestsData = Array.isArray(response.data) 
-            ? response.data 
+          const requestsData = Array.isArray(response.data)
+            ? response.data
             : response.data.requests || [];
-          
-          // Pour le lab, filtrer uniquement les demandes payées
-          let filtered = requestsData;
-          if (user?.role === 'lab') {
-            filtered = requestsData.filter((req: any) => req.paymentId);
-          }
-          
-          setRequests(filtered);
-          
+
+          setRequests(requestsData);
+
           // Calculer les statistiques
-          const pending = filtered.filter((r: any) => r.status === 'pending');
-          const completed = filtered.filter((r: any) => r.status === 'sent_to_doctor');
+          const pending = requestsData.filter((r: any) => r.status === 'pending');
+          const completed = requestsData.filter((r: any) => r.status === 'sent_to_doctor');
           setStats({
-            total: filtered.length,
+            total: requestsData.length,
             pending: pending.length,
             completed: completed.length,
           });
