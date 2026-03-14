@@ -95,29 +95,17 @@ const TestsPage: React.FC = () => {
 
   const itemsPerPage = 10;
 
-  // Formater un nombre avec des points comme séparateurs de milliers
-  const formatPrice = (value: string | number): string => {
-    if (!value) return '';
-    // Retirer tous les points existants
-    const numericValue = value.toString().replace(/\./g, '');
-    // Formater avec des points tous les 3 chiffres
-    return numericValue.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  // Formater pour affichage (séparateurs de milliers) - tableau uniquement
+  const formatPriceDisplay = (value: string | number): string => {
+    if (value === '' || value === null || value === undefined) return '';
+    const n = typeof value === 'number' ? value : parseInt(String(value).replace(/\D/g, ''), 10) || 0;
+    return n.toLocaleString('fr-FR', { maximumFractionDigits: 0 });
   };
 
-  // Parser une valeur formatée en nombre
+  // Parser la valeur saisie en nombre (ce que l'utilisateur tape = ce qu'il obtient)
   const parsePrice = (value: string): number => {
     if (!value) return 0;
-    // Retirer tous les points et convertir en nombre
-    return parseInt(value.replace(/\./g, ''), 10) || 0;
-  };
-
-  // Gérer le changement de prix avec formatage
-  const handlePriceChange = (value: string) => {
-    // Retirer tous les caractères non numériques sauf les points
-    const cleaned = value.replace(/[^\d.]/g, '');
-    // Formater avec des points
-    const formatted = formatPrice(cleaned);
-    setNewExam({ ...newExam, price: formatted });
+    return parseInt(value.replace(/\D/g, ''), 10) || 0;
   };
 
   // Charger les tests depuis l'API
@@ -259,7 +247,7 @@ const TestsPage: React.FC = () => {
     setNewExam({
       name: exam.name,
       type: exam.type,
-      price: formatPrice(exam.price.toString()),
+      price: String(exam.price),
     });
     setIsEditDialogOpen(true);
   };
@@ -438,10 +426,11 @@ const TestsPage: React.FC = () => {
                 <Label htmlFor="price">Prix (GNF) *</Label>
                 <Input
                   id="price"
-                  type="text"
-                  placeholder="Ex: 50.000"
+                  type="number"
+                  min="0"
+                  placeholder="Ex: 50000"
                   value={newExam.price}
-                  onChange={(e) => handlePriceChange(e.target.value)}
+                  onChange={(e) => setNewExam({ ...newExam, price: e.target.value })}
                 />
               </div>
               <div className="flex justify-end gap-2 pt-4 border-t">
@@ -532,7 +521,7 @@ const TestsPage: React.FC = () => {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right font-semibold">
-                        {formatPrice(exam.price.toString())} GNF
+                        {formatPriceDisplay(exam.price)} GNF
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-2">
@@ -651,13 +640,14 @@ const TestsPage: React.FC = () => {
             </div>
             <div className="space-y-2">
               <Label htmlFor="edit-price">Prix (GNF) *</Label>
-              <Input
-                id="edit-price"
-                type="text"
-                placeholder="Ex: 50.000"
-                value={newExam.price}
-                onChange={(e) => handlePriceChange(e.target.value)}
-              />
+                <Input
+                  id="edit-price"
+                  type="number"
+                  min="0"
+                  placeholder="Ex: 50000"
+                  value={newExam.price}
+                  onChange={(e) => setNewExam({ ...newExam, price: e.target.value })}
+                />
             </div>
             <div className="flex justify-end gap-2 pt-4 border-t">
               <Button
