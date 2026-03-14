@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import { toast } from 'sonner';
 import type { User, UserRole } from '@/types';
 import { getCurrentUser, logout as apiLogout } from '@/services/api/authService';
 
@@ -26,6 +27,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     return null;
   });
+
+  // Écouter l'expiration du token (401) pour se déconnecter automatiquement
+  useEffect(() => {
+    const onTokenExpired = () => {
+      toast.info('Votre session a expiré. Veuillez vous reconnecter.');
+      setUser(null);
+    };
+    window.addEventListener('auth:tokenExpired', onTokenExpired);
+    return () => window.removeEventListener('auth:tokenExpired', onTokenExpired);
+  }, []);
 
   // Vérifier l'authentification au chargement
   useEffect(() => {

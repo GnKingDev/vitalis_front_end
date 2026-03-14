@@ -118,6 +118,13 @@ export const apiRequest = async <T = any>(
     }
 
     if (!response.ok) {
+      if (response.status === 401) {
+        sessionStorage.removeItem('token');
+        sessionStorage.removeItem('user');
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        window.dispatchEvent(new CustomEvent('auth:tokenExpired'));
+      }
       await handleApiError(response);
     }
 
