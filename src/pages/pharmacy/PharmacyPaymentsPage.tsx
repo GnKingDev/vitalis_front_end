@@ -1390,6 +1390,64 @@ const PharmacyPaymentsPage: React.FC = () => {
                 )}
               </div>
 
+              {/* Info assurance / remise */}
+              {(() => {
+                const patient = detailPayment.patient;
+                const ins = Number(detailPayment.insuranceDeduction ?? 0);
+                const disc = Number(detailPayment.discountDeduction ?? 0);
+                const hasIns = ins > 0;
+                const hasDisc = disc > 0;
+                if (!hasIns && !hasDisc) return null;
+                return (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {hasIns && (
+                      <div className="p-4 rounded-lg border bg-primary/5 border-primary/20 space-y-2">
+                        <div className="flex items-center gap-2 font-medium text-sm text-primary">
+                          <Shield className="h-4 w-4" />
+                          Assurance
+                        </div>
+                        {patient?.insuranceEstablishmentName && (
+                          <div className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">Établissement</span>
+                            <span className="font-medium">{patient.insuranceEstablishmentName}</span>
+                          </div>
+                        )}
+                        {patient?.insuranceCoveragePercent > 0 && (
+                          <div className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">Prise en charge</span>
+                            <span className="font-medium">{patient.insuranceCoveragePercent}%</span>
+                          </div>
+                        )}
+                        {patient?.insuranceMemberNumber && (
+                          <div className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">N° membre</span>
+                            <span className="font-medium">{patient.insuranceMemberNumber}</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {hasDisc && (
+                      <div className="p-4 rounded-lg border bg-warning/5 border-warning/20 space-y-2">
+                        <div className="flex items-center gap-2 font-medium text-sm text-warning">
+                          <Percent className="h-4 w-4" />
+                          Remise
+                        </div>
+                        {patient?.discountPercent > 0 && (
+                          <div className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">Pourcentage</span>
+                            <span className="font-medium">{patient.discountPercent}%</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">Montant déduit</span>
+                          <span className="font-medium text-success">-{disc.toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} GNF</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
               {/* Totaux + assurance / remise */}
               <div className="space-y-3 p-4 bg-muted/50 rounded-lg border">
                 {(() => {

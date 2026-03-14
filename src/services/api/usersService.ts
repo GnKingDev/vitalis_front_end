@@ -90,7 +90,7 @@ export const resetPassword = async (
 
 /**
  * Supprimer un utilisateur
- */
+ */ 
 export const deleteUser = async (id: string): Promise<any> => {
   return api.delete(`/users/${id}`);
 };
